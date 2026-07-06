@@ -161,10 +161,12 @@
         /* no-scrollbar 유틸 (CDN Tailwind 미포함 대비) */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        /* 모델+고객 래퍼: 데스크톱에서는 없는 것처럼(직속 flex 자식 그대로) 동작 */
+        .modelcust-row { display: contents; }
 
         /* 모바일 전용 요소는 데스크톱에서 숨김 */
         #filter-fab, #filter-overlay, #mobile-menu-sheet, #mobile-menu-overlay,
-        .mobile-only, .drawer-close, .mobile-only-acct { display: none; }
+        .mobile-only, .drawer-close { display: none; }
 
         @media (max-width: 768px) {
             body { overflow-y: auto; }
@@ -232,18 +234,18 @@
                 display: grid !important;
                 grid-template-columns: 30px auto 1fr auto !important;
                 grid-template-areas:
-                    "check status .     time"
-                    "model model  cust  cust"
-                    "sched sched  sched sched"
-                    "addr  addr   addr  addr"
-                    "price price  price track" !important;
+                    "check status .         time"
+                    "modelcust modelcust modelcust modelcust"
+                    "sched sched sched sched"
+                    "addr  addr  addr  addr"
+                    "price price price track" !important;
                 align-items: center !important;
                 gap: 8px 6px !important;
                 padding: 12px 14px 12px 16px !important;
                 min-height: 0 !important;
             }
             .list-row:hover { transform: none !important; }
-            .list-row > [data-cell] { width: auto !important; min-width: 0 !important; }
+            .list-row [data-cell] { width: auto !important; min-width: 0 !important; }
 
             /* 1) 체크박스 바로 오른쪽에 상태 배지 */
             .list-row [data-cell="check"]  { grid-area: check; justify-self: start; justify-content: flex-start !important; padding-left: 0 !important; }
@@ -251,8 +253,14 @@
             .list-row [data-cell="status"] .status-badge { width: auto !important; }
             .list-row [data-cell="time"]   { grid-area: time; justify-self: end; text-align: right !important; }
 
-            /* 2) 대여모델 오른쪽에 고객명·연락처 */
-            .list-row [data-cell="model"]  { grid-area: model; justify-self: start; padding-right: 0 !important; }
+            /* 2) 대여모델 + 고객명·연락처: 하나의 flex 줄로 묶어 항상 서로 붙어 보이게(다른 칸 폭 영향 안 받음) */
+            .modelcust-row {
+                grid-area: modelcust; display: flex !important; flex-direction: row !important;
+                align-items: center !important; gap: 8px !important; min-width: 0; overflow: hidden;
+            }
+            .list-row [data-cell="model"] {
+                padding-right: 0 !important; flex-shrink: 0 !important; display: flex !important; flex-direction: column !important;
+            }
             .list-row [data-cell="model"] > div:first-child { width: auto !important; }
             .list-row [data-cell="model"] .model-chip {
                 font-size: 12px !important; padding: 6px 9px !important; letter-spacing: -0.02em;
@@ -262,8 +270,8 @@
             .list-row [data-cell="model"] > div:nth-child(2) { display: none !important; }
 
             .list-row [data-cell="customer"] {
-                grid-area: cust; display: flex !important; flex-direction: row !important;
-                align-items: center !important; gap: 6px !important; min-width: 0; overflow: hidden;
+                display: flex !important; flex-direction: row !important;
+                align-items: center !important; gap: 6px !important; min-width: 0; overflow: hidden; flex: 1 1 auto;
             }
             .list-row [data-cell="customer"] .cust-name-row,
             .list-row [data-cell="customer"] .cust-phone-row { display: contents !important; }
@@ -281,16 +289,13 @@
                 -webkit-line-clamp: 2; -webkit-box-orient: vertical;
                 overflow: hidden; text-overflow: ellipsis;
             }
-            /* 계좌번호: 모바일 상세 카드에서만 노출 */
-            .mobile-only-acct { display: block !important; }
-
-            /* 3·4) 금액·결제수단·송장칸: 한 줄 + 같은 높이 + 우측 정렬 */
+            /* 결제금액·결제수단·송장칸: 한 줄 + 같은 높이 + 우측 정렬. 결제수단을 왼쪽, 금액을 오른쪽(잘리지 않게)에 배치 */
             .list-row [data-cell="price"] {
                 grid-area: price; display: flex !important; flex-direction: row !important;
-                align-items: center !important; justify-content: flex-end !important; gap: 8px !important;
+                align-items: center !important; justify-content: flex-end !important; gap: 6px !important;
             }
-            .list-row [data-cell="price"] .price-amount { flex: 0 0 auto !important; white-space: nowrap !important; font-size: 15px !important; }
-            .list-row [data-cell="price"] .pay-badge { flex: 0 0 auto !important; white-space: nowrap !important; margin-top: 0 !important; }
+            .list-row [data-cell="price"] .price-amount { flex: 0 0 auto !important; white-space: nowrap !important; font-size: 15px !important; order: 2 !important; }
+            .list-row [data-cell="price"] .pay-badge { flex: 0 0 auto !important; white-space: nowrap !important; margin-top: 0 !important; order: 1 !important; }
             .list-row [data-cell="tracking"] {
                 grid-area: track; display: flex !important; flex-direction: row !important;
                 align-items: center !important; justify-content: flex-end !important;
@@ -413,25 +418,31 @@
                 display: grid !important;
                 grid-template-columns: 30px auto 1fr auto !important;
                 grid-template-areas:
-                    "check status .     time"
-                    "model model  cust  cust"
-                    "sched sched  sched sched"
-                    "addr  addr   addr  addr"
-                    "price price  price track" !important;
+                    "check status .         time"
+                    "modelcust modelcust modelcust modelcust"
+                    "sched sched sched sched"
+                    "addr  addr  addr  addr"
+                    "price price price track" !important;
                 align-items: center !important;
                 gap: 8px 6px !important;
                 padding: 12px 14px 12px 16px !important;
                 min-height: 0 !important;
             }
             html.force-mobile .list-row:hover { transform: none !important; }
-            html.force-mobile .list-row > [data-cell] { width: auto !important; min-width: 0 !important; }
+            html.force-mobile .list-row [data-cell] { width: auto !important; min-width: 0 !important; }
             /* 1) 체크박스 바로 오른쪽에 상태 배지 */
             html.force-mobile .list-row [data-cell="check"] { grid-area: check; justify-self: start; justify-content: flex-start !important; padding-left: 0 !important; }
             html.force-mobile .list-row [data-cell="status"] { grid-area: status; justify-self: start; }
             html.force-mobile .list-row [data-cell="status"] .status-badge { width: auto !important; }
             html.force-mobile .list-row [data-cell="time"] { grid-area: time; justify-self: end; text-align: right !important; }
-            /* 2) 대여모델 오른쪽에 고객명·연락처 */
-            html.force-mobile .list-row [data-cell="model"] { grid-area: model; justify-self: start; padding-right: 0 !important; }
+            /* 2) 대여모델 + 고객명·연락처: 하나의 flex 줄로 묶어 항상 서로 붙어 보이게(다른 칸 폭 영향 안 받음) */
+            html.force-mobile .modelcust-row {
+                grid-area: modelcust; display: flex !important; flex-direction: row !important;
+                align-items: center !important; gap: 8px !important; min-width: 0; overflow: hidden;
+            }
+            html.force-mobile .list-row [data-cell="model"] {
+                padding-right: 0 !important; flex-shrink: 0 !important; display: flex !important; flex-direction: column !important;
+            }
             html.force-mobile .list-row [data-cell="model"] > div:first-child { width: auto !important; }
             html.force-mobile .list-row [data-cell="model"] .model-chip {
                 font-size: 12px !important; padding: 6px 9px !important; letter-spacing: -0.02em;
@@ -440,8 +451,8 @@
             /* 배터리/백업/연장 미니뱃지는 좁은 칸이라 숨김(칩 이모지로 대체) */
             html.force-mobile .list-row [data-cell="model"] > div:nth-child(2) { display: none !important; }
             html.force-mobile .list-row [data-cell="customer"] {
-                grid-area: cust; display: flex !important; flex-direction: row !important;
-                align-items: center !important; gap: 6px !important; min-width: 0; overflow: hidden;
+                display: flex !important; flex-direction: row !important;
+                align-items: center !important; gap: 6px !important; min-width: 0; overflow: hidden; flex: 1 1 auto;
             }
             html.force-mobile .list-row [data-cell="customer"] .cust-name-row, html.force-mobile .list-row [data-cell="customer"] .cust-phone-row { display: contents !important; }
             html.force-mobile .list-row [data-cell="customer"] .cust-name { max-width: 112px; font-size: 14px !important; flex-shrink: 1; }
@@ -457,15 +468,13 @@
                 -webkit-line-clamp: 2; -webkit-box-orient: vertical;
                 overflow: hidden; text-overflow: ellipsis;
             }
-            /* 계좌번호: 모바일 상세 카드에서만 노출 */
-            html.force-mobile .mobile-only-acct { display: block !important; }
-            /* 3·4) 금액·결제수단·송장칸: 한 줄 + 같은 높이 + 우측 정렬 */
+            /* 결제금액·결제수단·송장칸: 한 줄 + 같은 높이 + 우측 정렬. 결제수단을 왼쪽, 금액을 오른쪽(잘리지 않게)에 배치 */
             html.force-mobile .list-row [data-cell="price"] {
                 grid-area: price; display: flex !important; flex-direction: row !important;
-                align-items: center !important; justify-content: flex-end !important; gap: 8px !important;
+                align-items: center !important; justify-content: flex-end !important; gap: 6px !important;
             }
-            html.force-mobile .list-row [data-cell="price"] .price-amount { flex: 0 0 auto !important; white-space: nowrap !important; font-size: 15px !important; }
-            html.force-mobile .list-row [data-cell="price"] .pay-badge { flex: 0 0 auto !important; white-space: nowrap !important; margin-top: 0 !important; }
+            html.force-mobile .list-row [data-cell="price"] .price-amount { flex: 0 0 auto !important; white-space: nowrap !important; font-size: 15px !important; order: 2 !important; }
+            html.force-mobile .list-row [data-cell="price"] .pay-badge { flex: 0 0 auto !important; white-space: nowrap !important; margin-top: 0 !important; order: 1 !important; }
             html.force-mobile .list-row [data-cell="tracking"] {
                 grid-area: track; display: flex !important; flex-direction: row !important;
                 align-items: center !important; justify-content: flex-end !important;
@@ -826,7 +835,7 @@
 
     <!-- 📱 모바일 전용: 필터 드로어 오버레이 & 플로팅 버튼 -->
     <div id="filter-overlay" onclick="closeFilterDrawer()"></div>
-    <button id="filter-fab" onclick="openFilterDrawer()" title="필터 열기">
+    <button id="filter-fab" onclick="toggleFilterDrawer()" title="필터 열기/닫기">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
         <span class="fab-label">필터</span>
     </button>
@@ -875,6 +884,13 @@
                             </div>
                         </div>
                         <div><label class="input-label">공연명 / 일정명</label><input type="text" id="edit-schedule" class="input-field" placeholder="예) 엔시티 콘서트"></div>
+                        <div class="mt-4">
+                            <label class="input-label">환불 계좌</label>
+                            <div class="flex gap-2">
+                                <input type="text" id="edit-account" class="input-field flex-1" placeholder="예) 카카오뱅크 3333-00-0000000">
+                                <button type="button" onclick="copyTextToClipboard(document.getElementById('edit-account').value, '계좌번호')" class="shrink-0 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-600 font-bold text-sm transition-colors">📋 복사</button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="form-section shadow-sm bg-white">
@@ -1168,7 +1184,7 @@
                     name: 'name', phone: 'phone', orderTime: 'orderTime',
                     zipCode: 'zipcode', address: 'address', startDate: 'startDate',
                     delivery: 'delivery', returnWay: 'returnMethod',
-                    review: 'review', scheduleName: 'scheduleName'
+                    review: 'review', scheduleName: 'scheduleName', account: 'account'
                 };
                 for (const k in map) {
                     if (k in payload) {
@@ -1209,6 +1225,11 @@
             document.getElementById('filter-sidebar').classList.remove('open');
             document.getElementById('filter-overlay').classList.remove('open');
             document.body.style.overflow = '';
+        }
+        function toggleFilterDrawer() {
+            const sidebar = document.getElementById('filter-sidebar');
+            if (sidebar.classList.contains('open')) { closeFilterDrawer(); }
+            else { openFilterDrawer(); }
         }
         function toggleMobileMenu() {
             const s = document.getElementById('mobile-menu-sheet');
@@ -3252,6 +3273,7 @@
                         ${time}
                     </div>
 
+                    <div class="modelcust-row">
                     <div data-cell="model" class="w-36 shrink-0 flex flex-col justify-center pr-2">
                         <div onclick="event.stopPropagation()" title="클릭하여 기기 바로 배정 (엔터 누르면 다음 줄로 이동)" class="w-full">
                             <div id="model-display-${item.row}" class="model-chip bg-white text-slate-800 px-2 py-1.5 rounded-lg font-black text-[14px] border border-slate-300 cursor-pointer hover:bg-blue-50 hover:border-blue-400 hover:text-blue-700 transition-all truncate shadow-sm text-center w-full" onclick="enableInlineEdit(event, '${item.row}')">📱 ${displayModel || '미정'}</div>
@@ -3275,6 +3297,7 @@
                             <span class="cust-phone">${item.phone || '-'}</span>
                         </div>
                     </div>
+                    </div>
                     
                     <div data-cell="schedule" class="w-64 shrink-0 flex flex-col justify-center gap-1.5">
                         <div class="flex items-center text-[13.5px] font-black text-slate-800 font-tnum tracking-tight">
@@ -3296,12 +3319,11 @@
                                 ${item.address || '-'}
                             </div>
                         ` : `<span class="text-[12px] text-slate-300 font-bold">-</span>`}
-                        ${item.account ? `<div class="acct-line mobile-only-acct text-[12px] font-bold text-indigo-600 mt-1 truncate" title="${item.account}">🏦 ${item.account}</div>` : ''}
                     </div>
                     
                     <div data-cell="price" class="w-[72px] shrink-0 flex flex-col justify-center items-start">
-                        <div class="price-amount text-[13px] font-black text-slate-900 font-tnum truncate w-full">${price}</div>
-                        <div class="pay-badge text-[11px] font-bold px-1.5 py-0.5 rounded mt-0.5 ${payBadgeClass}">${payShort}</div>
+                        <div class="pay-badge text-[11px] font-bold px-1.5 py-0.5 rounded ${payBadgeClass}">${payShort}</div>
+                        <div class="price-amount text-[13px] font-black text-slate-900 font-tnum w-full mt-0.5">${price}</div>
                     </div>
 
                     <div data-cell="tracking" class="w-24 shrink-0 flex flex-col justify-center items-center pl-2 border-l border-slate-100 border-dashed">
@@ -3642,6 +3664,7 @@
             document.getElementById('edit-row').value = item.row;
             document.getElementById('edit-sheet-name').value = item.sheetName || '예약내역'; 
             document.getElementById('edit-schedule').value = item.scheduleName || '';
+            document.getElementById('edit-account').value = item.account || '';
             
             document.getElementById('edit-order-time').value = item.orderTime || ''; 
             
@@ -3727,6 +3750,21 @@
         }
         function closeAppModal() { document.getElementById('app-modal').classList.add('hidden'); }
 
+        function copyTextToClipboard(text, label) {
+            if (!text) return;
+            const finish = () => showToast((label || '내용') + '이(가) 복사되었습니다');
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(finish).catch(finish);
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+                document.body.appendChild(ta); ta.select();
+                try { document.execCommand('copy'); } catch (e) {}
+                document.body.removeChild(ta);
+                finish();
+            }
+        }
+
         document.getElementById('edit-battery').onchange = function() { updateBatteryUI(this.checked); };
         function updateBatteryUI(checked) {
             const box = document.getElementById('battery-box-ui');
@@ -3755,6 +3793,7 @@
                 name: document.getElementById('edit-name').value, phone: document.getElementById('edit-phone').value,
                 zipCode: document.getElementById('edit-zipcode').value, address: document.getElementById('edit-address').value,
                 scheduleName: document.getElementById('edit-schedule').value,
+                account: document.getElementById('edit-account').value,
                 startDate: document.getElementById('edit-start').value, endDate: document.getElementById('edit-end').value, 
                 delivery: document.getElementById('edit-delivery').value, returnWay: document.getElementById('edit-return-way').value, 
                 status: document.getElementById('edit-status-val').value, tracking: document.getElementById('edit-tracking').value,
@@ -3770,7 +3809,7 @@
                     name: payload.name, phone: payload.phone, zipCode: payload.zipCode, address: payload.address, 
                     startDate: payload.startDate, endDate: payload.endDate, delivery: payload.delivery, returnWay: payload.returnWay, 
                     status: payload.status, trackingNumber: payload.tracking, model: payload.model, memo: payload.memo, totalPrice: payload.totalPrice,
-                    review: payload.review, scheduleName: payload.scheduleName
+                    review: payload.review, scheduleName: payload.scheduleName, account: payload.account
                 });
             }
 
