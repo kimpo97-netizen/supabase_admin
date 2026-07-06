@@ -172,17 +172,17 @@
 
             /* ---------- 상단 헤더 ---------- */
             header.mobile-header { height: auto !important; min-height: 60px; }
-            header.mobile-header > div { padding: 10px 12px !important; }
-            .hdr-logo { margin-right: 8px !important; }
+            header.mobile-header > div { display: flex !important; align-items: center !important; padding: 10px 10px 10px 54px !important; position: relative; }
+            .hdr-logo { display: none !important; }
             .hdr-logo .logo-text, .mobile-hide, .btn-label { display: none !important; }
-            #hdr-actions { flex: 1 1 auto; gap: 8px !important; flex-wrap: nowrap !important; }
-            .hdr-search { width: auto !important; flex: 1 1 auto !important; min-width: 0; }
-            .hdr-core { padding-left: 12px !important; padding-right: 12px !important; }
+            #hdr-actions { display: flex !important; align-items: center !important; flex: 1 1 auto; gap: 6px !important; flex-wrap: nowrap !important; }
+            .hdr-search { width: auto !important; flex: 1 1 auto !important; min-width: 0 !important; }
+            .hdr-core { flex-shrink: 0; padding-left: 10px !important; padding-right: 10px !important; }
             .hdr-more {
                 display: flex !important; align-items: center; justify-content: center;
-                height: 44px; width: 44px; flex-shrink: 0; font-size: 22px; font-weight: 900;
+                height: 42px; width: 40px; flex-shrink: 0; font-size: 20px; font-weight: 900;
                 line-height: 1; color: #64748b; background: #f1f5f9; border: 1px solid #e2e8f0;
-                border-radius: 14px; cursor: pointer;
+                border-radius: 12px; cursor: pointer; padding: 0 !important;
             }
 
             /* ---------- 메인 레이아웃 ---------- */
@@ -214,13 +214,15 @@
                 z-index: 310; opacity: 0; pointer-events: none; transition: opacity 0.28s;
             }
             #filter-overlay.open { opacity: 1; pointer-events: auto; }
+            /* 필터 버튼: 좌측 상단, 짝대기 3개(햄버거) 아이콘만 표시 */
             #filter-fab {
-                display: flex; align-items: center; gap: 6px;
-                position: fixed; left: 16px; bottom: 20px; z-index: 300;
-                background: #4f46e5; color: #fff; border: none;
-                padding: 13px 18px; border-radius: 50px; font-size: 14px; font-weight: 800;
-                box-shadow: 0 8px 24px -4px rgba(79, 70, 229, 0.5); cursor: pointer;
+                display: flex; align-items: center; justify-content: center;
+                position: fixed; top: 14px; left: 12px; z-index: 330;
+                width: 40px; height: 40px; padding: 0;
+                background: #4f46e5; color: #fff; border: none; border-radius: 12px;
+                box-shadow: 0 6px 16px -4px rgba(79, 70, 229, 0.5); cursor: pointer;
             }
+            #filter-fab .fab-label { display: none; }
 
             /* ---------- 데스크톱 리스트 헤더(컬럼) 숨김 ---------- */
             #list-header { display: none !important; }
@@ -228,16 +230,15 @@
             /* ---------- 리스트 로우 → 세로 카드 ---------- */
             .list-row {
                 display: grid !important;
-                grid-template-columns: auto 1fr auto !important;
+                grid-template-columns: 68px 1fr auto !important;
                 grid-template-areas:
                     "check status time"
-                    "model model  model"
-                    "cust  cust   cust"
-                    "sched sched  sched"
-                    "addr  addr   addr"
-                    "price price  track" !important;
+                    "model cust   cust"
+                    "sched sched sched"
+                    "addr  addr  addr"
+                    "price price track" !important;
                 align-items: center !important;
-                gap: 9px 10px !important;
+                gap: 8px 10px !important;
                 padding: 12px 14px 12px 18px !important;
                 min-height: 0 !important;
             }
@@ -248,17 +249,40 @@
             .list-row [data-cell="status"]   { grid-area: status; justify-self: start; }
             .list-row [data-cell="status"] .status-badge { width: auto !important; }
             .list-row [data-cell="time"]     { grid-area: time; justify-self: end; text-align: right !important; }
-            .list-row [data-cell="model"]    { grid-area: model; padding-right: 0 !important; }
-            .list-row [data-cell="customer"] { grid-area: cust; }
+
+            /* 대여모델: 칸을 줄여서 이름/연락처와 한 줄에 표시 */
+            .list-row [data-cell="model"]    { grid-area: model; padding-right: 0 !important; align-self: center !important; }
+            .list-row [data-cell="model"] .model-chip {
+                font-size: 11px !important; padding: 6px 3px !important; letter-spacing: -0.03em;
+            }
+            /* 배터리/백업/연장 미니뱃지는 모델 칸이 좁아졌으므로 모바일에서 숨김(칩 자체 이모지로 대체) */
+            .list-row [data-cell="model"] > div:nth-child(2) { display: none !important; }
+
+            /* 고객정보: 이름 + 연락처를 한 줄로 표시 */
+            .list-row [data-cell="customer"] {
+                grid-area: cust; display: flex !important; flex-direction: row !important;
+                align-items: center !important; gap: 6px !important; min-width: 0; overflow: hidden;
+            }
+            .list-row [data-cell="customer"] .cust-name-row,
+            .list-row [data-cell="customer"] .cust-phone-row { display: contents !important; }
+            .list-row [data-cell="customer"] .cust-name {
+                max-width: 96px; font-size: 13.5px !important; flex-shrink: 1;
+            }
+            .list-row [data-cell="customer"] .cust-phone {
+                white-space: nowrap !important; flex-shrink: 0; font-size: 12px !important;
+            }
+
             .list-row [data-cell="schedule"] { grid-area: sched; }
             .list-row [data-cell="address"]  {
                 grid-area: addr; padding: 8px 10px !important;
                 background: #f8fafc; border: 1px solid #eef2f7; border-radius: 10px;
             }
             .list-row [data-cell="price"]    {
-                grid-area: price; flex-direction: row !important;
+                grid-area: price; display: flex !important; flex-direction: row !important;
                 align-items: center !important; gap: 8px !important;
             }
+            .list-row [data-cell="price"] .price-amount { flex: 1 1 auto; min-width: 0; white-space: nowrap !important; }
+            .list-row [data-cell="price"] .pay-badge { flex-shrink: 0 !important; white-space: nowrap !important; margin-top: 0 !important; }
             .list-row [data-cell="tracking"] {
                 grid-area: track; border-left: none !important; padding-left: 0 !important;
                 align-items: flex-end !important;
@@ -273,6 +297,18 @@
             /* ---------- 일괄 처리 바 ---------- */
             #bulk-action-bar { padding: 12px !important; }
             #bulk-action-bar button { white-space: nowrap; }
+
+            /* 상태변경: 5개 버튼이 줄바꿈 없이 한 줄에 들어가도록 축소 */
+            .status-btn-row { display: flex !important; flex-wrap: nowrap !important; gap: 4px !important; }
+            .status-btn-row > span:first-child { width: 28px !important; font-size: 9px !important; line-height: 1.15; flex-shrink: 0; }
+            .status-chg-btn {
+                flex: 1 1 0 !important; min-width: 0 !important; width: auto !important;
+                padding: 8px 0 !important; font-size: 11px !important;
+            }
+            .status-divider { margin-left: 1px !important; margin-right: 1px !important; }
+
+            /* 추가작업: 연장 / 백업추가만 노출, 나머지는 숨김 */
+            .extra-action-btn { display: none !important; }
 
             /* ---------- 모달 (하단 시트형) ---------- */
             #modal-root, #calendar-modal-root { align-items: flex-end !important; }
@@ -310,128 +346,167 @@
 
         /* 터치 기기(실제 폰)면 화면폭과 무관하게 모바일 레이아웃 강제 — 데스크톱 사이트 보기 대응 */
         html.force-mobile { }
+
             html.force-mobile body { overflow-y: auto; }
             html.force-mobile body.modal-open { padding-right: 0 !important; }
+            /* ---------- 상단 헤더 ---------- */
             html.force-mobile header.mobile-header { height: auto !important; min-height: 60px; }
-            html.force-mobile header.mobile-header > div { padding: 10px 12px !important; }
-            html.force-mobile .hdr-logo { margin-right: 8px !important; }
+            html.force-mobile header.mobile-header > div { display: flex !important; align-items: center !important; padding: 10px 10px 10px 54px !important; position: relative; }
+            html.force-mobile .hdr-logo { display: none !important; }
             html.force-mobile .hdr-logo .logo-text, html.force-mobile .mobile-hide, html.force-mobile .btn-label { display: none !important; }
-            html.force-mobile #hdr-actions { flex: 1 1 auto; gap: 8px !important; flex-wrap: nowrap !important; }
-            html.force-mobile .hdr-search { width: auto !important; flex: 1 1 auto !important; min-width: 0; }
-            html.force-mobile .hdr-core { padding-left: 12px !important; padding-right: 12px !important; }
+            html.force-mobile #hdr-actions { display: flex !important; align-items: center !important; flex: 1 1 auto; gap: 6px !important; flex-wrap: nowrap !important; }
+            html.force-mobile .hdr-search { width: auto !important; flex: 1 1 auto !important; min-width: 0 !important; }
+            html.force-mobile .hdr-core { flex-shrink: 0; padding-left: 10px !important; padding-right: 10px !important; }
             html.force-mobile .hdr-more {
-                            display: flex !important; align-items: center; justify-content: center;
-                            height: 44px; width: 44px; flex-shrink: 0; font-size: 22px; font-weight: 900;
-                            line-height: 1; color: #64748b; background: #f1f5f9; border: 1px solid #e2e8f0;
-                            border-radius: 14px; cursor: pointer;
-                        }
+                display: flex !important; align-items: center; justify-content: center;
+                height: 42px; width: 40px; flex-shrink: 0; font-size: 20px; font-weight: 900;
+                line-height: 1; color: #64748b; background: #f1f5f9; border: 1px solid #e2e8f0;
+                border-radius: 12px; cursor: pointer; padding: 0 !important;
+            }
+            /* ---------- 메인 레이아웃 ---------- */
             html.force-mobile .main-wrap { flex-direction: column !important; gap: 0 !important; padding: 12px !important; }
             html.force-mobile main.mobile-main { width: 100% !important; }
+            /* ---------- 필터 사이드바 → 슬라이드 드로어 ---------- */
             html.force-mobile #filter-sidebar {
-                            position: fixed !important; top: 0; left: 0; bottom: 0;
-                            width: 86vw; max-width: 360px; height: 100dvh;
-                            background: var(--bg-color); z-index: 320;
-                            padding: 14px 14px 48px; overflow-y: auto; gap: 14px !important;
-                            transform: translateX(-100%);
-                            transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
-                            box-shadow: 8px 0 30px -8px rgba(0, 0, 0, 0.25);
-                        }
+                position: fixed !important; top: 0; left: 0; bottom: 0;
+                width: 86vw; max-width: 360px; height: 100dvh;
+                background: var(--bg-color); z-index: 320;
+                padding: 14px 14px 48px; overflow-y: auto; gap: 14px !important;
+                transform: translateX(-100%);
+                transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+                box-shadow: 8px 0 30px -8px rgba(0, 0, 0, 0.25);
+            }
             html.force-mobile #filter-sidebar.open { transform: translateX(0); }
             html.force-mobile .drawer-close {
-                            display: flex !important; align-items: center; justify-content: space-between;
-                            font-size: 16px; font-weight: 900; color: #1e293b; padding: 2px 2px 4px;
-                            position: sticky; top: 0; background: var(--bg-color); z-index: 2;
-                        }
+                display: flex !important; align-items: center; justify-content: space-between;
+                font-size: 16px; font-weight: 900; color: #1e293b; padding: 2px 2px 4px;
+                position: sticky; top: 0; background: var(--bg-color); z-index: 2;
+            }
             html.force-mobile .drawer-close button {
-                            width: 34px; height: 34px; border-radius: 10px; background: #fff;
-                            border: 1px solid #e2e8f0; font-size: 18px; color: #475569; cursor: pointer;
-                        }
+                width: 34px; height: 34px; border-radius: 10px; background: #fff;
+                border: 1px solid #e2e8f0; font-size: 18px; color: #475569; cursor: pointer;
+            }
             html.force-mobile #filter-overlay {
-                            display: block; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
-                            z-index: 310; opacity: 0; pointer-events: none; transition: opacity 0.28s;
-                        }
+                display: block; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+                z-index: 310; opacity: 0; pointer-events: none; transition: opacity 0.28s;
+            }
             html.force-mobile #filter-overlay.open { opacity: 1; pointer-events: auto; }
+            /* 필터 버튼: 좌측 상단, 짝대기 3개(햄버거) 아이콘만 표시 */
             html.force-mobile #filter-fab {
-                            display: flex; align-items: center; gap: 6px;
-                            position: fixed; left: 16px; bottom: 20px; z-index: 300;
-                            background: #4f46e5; color: #fff; border: none;
-                            padding: 13px 18px; border-radius: 50px; font-size: 14px; font-weight: 800;
-                            box-shadow: 0 8px 24px -4px rgba(79, 70, 229, 0.5); cursor: pointer;
-                        }
+                display: flex; align-items: center; justify-content: center;
+                position: fixed; top: 14px; left: 12px; z-index: 330;
+                width: 40px; height: 40px; padding: 0;
+                background: #4f46e5; color: #fff; border: none; border-radius: 12px;
+                box-shadow: 0 6px 16px -4px rgba(79, 70, 229, 0.5); cursor: pointer;
+            }
+            html.force-mobile #filter-fab .fab-label { display: none; }
+            /* ---------- 데스크톱 리스트 헤더(컬럼) 숨김 ---------- */
             html.force-mobile #list-header { display: none !important; }
+            /* ---------- 리스트 로우 → 세로 카드 ---------- */
             html.force-mobile .list-row {
-                            display: grid !important;
-                            grid-template-columns: auto 1fr auto !important;
-                            grid-template-areas:
-                                "check status time"
-                                "model model  model"
-                                "cust  cust   cust"
-                                "sched sched  sched"
-                                "addr  addr   addr"
-                                "price price  track" !important;
-                            align-items: center !important;
-                            gap: 9px 10px !important;
-                            padding: 12px 14px 12px 18px !important;
-                            min-height: 0 !important;
-                        }
+                display: grid !important;
+                grid-template-columns: 68px 1fr auto !important;
+                grid-template-areas:
+                    "check status time"
+                    "model cust   cust"
+                    "sched sched sched"
+                    "addr  addr  addr"
+                    "price price track" !important;
+                align-items: center !important;
+                gap: 8px 10px !important;
+                padding: 12px 14px 12px 18px !important;
+                min-height: 0 !important;
+            }
             html.force-mobile .list-row:hover { transform: none !important; }
             html.force-mobile .list-row > [data-cell] { width: auto !important; min-width: 0 !important; }
             html.force-mobile .list-row [data-cell="check"] { grid-area: check; justify-self: start; padding-left: 0 !important; }
             html.force-mobile .list-row [data-cell="status"] { grid-area: status; justify-self: start; }
             html.force-mobile .list-row [data-cell="status"] .status-badge { width: auto !important; }
             html.force-mobile .list-row [data-cell="time"] { grid-area: time; justify-self: end; text-align: right !important; }
-            html.force-mobile .list-row [data-cell="model"] { grid-area: model; padding-right: 0 !important; }
-            html.force-mobile .list-row [data-cell="customer"] { grid-area: cust; }
+            /* 대여모델: 칸을 줄여서 이름/연락처와 한 줄에 표시 */
+            html.force-mobile .list-row [data-cell="model"] { grid-area: model; padding-right: 0 !important; align-self: center !important; }
+            html.force-mobile .list-row [data-cell="model"] .model-chip {
+                font-size: 11px !important; padding: 6px 3px !important; letter-spacing: -0.03em;
+            }
+            /* 배터리/백업/연장 미니뱃지는 모델 칸이 좁아졌으므로 모바일에서 숨김(칩 자체 이모지로 대체) */
+            html.force-mobile .list-row [data-cell="model"] > div:nth-child(2) { display: none !important; }
+            /* 고객정보: 이름 + 연락처를 한 줄로 표시 */
+            html.force-mobile .list-row [data-cell="customer"] {
+                grid-area: cust; display: flex !important; flex-direction: row !important;
+                align-items: center !important; gap: 6px !important; min-width: 0; overflow: hidden;
+            }
+            html.force-mobile .list-row [data-cell="customer"] .cust-name-row, html.force-mobile .list-row [data-cell="customer"] .cust-phone-row { display: contents !important; }
+            html.force-mobile .list-row [data-cell="customer"] .cust-name {
+                max-width: 96px; font-size: 13.5px !important; flex-shrink: 1;
+            }
+            html.force-mobile .list-row [data-cell="customer"] .cust-phone {
+                white-space: nowrap !important; flex-shrink: 0; font-size: 12px !important;
+            }
             html.force-mobile .list-row [data-cell="schedule"] { grid-area: sched; }
             html.force-mobile .list-row [data-cell="address"] {
-                            grid-area: addr; padding: 8px 10px !important;
-                            background: #f8fafc; border: 1px solid #eef2f7; border-radius: 10px;
-                        }
+                grid-area: addr; padding: 8px 10px !important;
+                background: #f8fafc; border: 1px solid #eef2f7; border-radius: 10px;
+            }
             html.force-mobile .list-row [data-cell="price"] {
-                            grid-area: price; flex-direction: row !important;
-                            align-items: center !important; gap: 8px !important;
-                        }
+                grid-area: price; display: flex !important; flex-direction: row !important;
+                align-items: center !important; gap: 8px !important;
+            }
+            html.force-mobile .list-row [data-cell="price"] .price-amount { flex: 1 1 auto; min-width: 0; white-space: nowrap !important; }
+            html.force-mobile .list-row [data-cell="price"] .pay-badge { flex-shrink: 0 !important; white-space: nowrap !important; margin-top: 0 !important; }
             html.force-mobile .list-row [data-cell="tracking"] {
-                            grid-area: track; border-left: none !important; padding-left: 0 !important;
-                            align-items: flex-end !important;
-                        }
+                grid-area: track; border-left: none !important; padding-left: 0 !important;
+                align-items: flex-end !important;
+            }
+            /* 주소: 길면 2줄까지 표시 후 …으로 생략 */
             html.force-mobile .list-row [data-cell="address"] .addr-text {
-                            white-space: normal !important; display: -webkit-box;
-                            -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-                            overflow: hidden; text-overflow: ellipsis;
-                        }
+                white-space: normal !important; display: -webkit-box;
+                -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+                overflow: hidden; text-overflow: ellipsis;
+            }
+            /* ---------- 일괄 처리 바 ---------- */
             html.force-mobile #bulk-action-bar { padding: 12px !important; }
             html.force-mobile #bulk-action-bar button { white-space: nowrap; }
+            /* 상태변경: 5개 버튼이 줄바꿈 없이 한 줄에 들어가도록 축소 */
+            html.force-mobile .status-btn-row { display: flex !important; flex-wrap: nowrap !important; gap: 4px !important; }
+            html.force-mobile .status-btn-row > span:first-child { width: 28px !important; font-size: 9px !important; line-height: 1.15; flex-shrink: 0; }
+            html.force-mobile .status-chg-btn {
+                flex: 1 1 0 !important; min-width: 0 !important; width: auto !important;
+                padding: 8px 0 !important; font-size: 11px !important;
+            }
+            html.force-mobile .status-divider { margin-left: 1px !important; margin-right: 1px !important; }
+            /* 추가작업: 연장 / 백업추가만 노출, 나머지는 숨김 */
+            html.force-mobile .extra-action-btn { display: none !important; }
+            /* ---------- 모달 (하단 시트형) ---------- */
             html.force-mobile #modal-root, html.force-mobile #calendar-modal-root { align-items: flex-end !important; }
             html.force-mobile .center-modal {
-                            max-width: 100% !important; max-height: 94dvh !important;
-                            border-radius: 20px 20px 0 0 !important;
-                        }
+                max-width: 100% !important; max-height: 94dvh !important;
+                border-radius: 20px 20px 0 0 !important;
+            }
             html.force-mobile .scroll-area { padding: 16px !important; }
             html.force-mobile .center-modal .px-8 { padding-left: 16px !important; padding-right: 16px !important; }
+            /* ---------- 모바일 메뉴 시트 ---------- */
             html.force-mobile #mobile-menu-overlay {
-                            display: block; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
-                            z-index: 340; opacity: 0; pointer-events: none; transition: opacity 0.25s;
-                        }
+                display: block; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+                z-index: 340; opacity: 0; pointer-events: none; transition: opacity 0.25s;
+            }
             html.force-mobile #mobile-menu-overlay.open { opacity: 1; pointer-events: auto; }
             html.force-mobile #mobile-menu-sheet {
-                            display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 350;
-                            background: #fff; border-radius: 20px 20px 0 0; padding: 8px 12px calc(16px + env(safe-area-inset-bottom));
-                            transform: translateY(110%); transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
-                            box-shadow: 0 -8px 30px -8px rgba(0, 0, 0, 0.25);
-                        }
+                display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 350;
+                background: #fff; border-radius: 20px 20px 0 0; padding: 8px 12px calc(16px + env(safe-area-inset-bottom));
+                transform: translateY(110%); transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+                box-shadow: 0 -8px 30px -8px rgba(0, 0, 0, 0.25);
+            }
             html.force-mobile #mobile-menu-sheet.open { transform: translateY(0); }
             html.force-mobile #mobile-menu-sheet .mm-title {
-                            text-align: center; font-size: 13px; font-weight: 800; color: #94a3b8; padding: 10px 0 6px;
-                        }
+                text-align: center; font-size: 13px; font-weight: 800; color: #94a3b8; padding: 10px 0 6px;
+            }
             html.force-mobile #mobile-menu-sheet button {
-                            width: 100%; text-align: left; padding: 15px 14px; border-radius: 12px;
-                            font-size: 15px; font-weight: 700; color: #1e293b; background: transparent;
-                            border: none; cursor: pointer; display: flex; align-items: center; gap: 10px;
-                        }
+                width: 100%; text-align: left; padding: 15px 14px; border-radius: 12px;
+                font-size: 15px; font-weight: 700; color: #1e293b; background: transparent;
+                border: none; cursor: pointer; display: flex; align-items: center; gap: 10px;
+            }
             html.force-mobile #mobile-menu-sheet button:active { background: #f1f5f9; }
             html.force-mobile #mobile-menu-sheet button.mm-logout { color: #e11d48; }
-
     </style>
 </head>
 <body>
@@ -671,28 +746,28 @@
                 <div class="w-full h-px bg-slate-100"></div>
                 
                 <div class="flex flex-col gap-2 w-full">
-                    <div class="flex flex-wrap items-center justify-start gap-4 w-full">
+                    <div class="status-btn-row flex flex-wrap items-center justify-start gap-4 w-full">
                         <span class="text-[11px] font-black text-slate-400 w-12 shrink-0">상태변경</span>
-                        <button onclick="bulkUpdateStatus('확정')" class="text-[14px] font-bold bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-800 px-8 py-2.5 min-w-[84px] rounded-lg transition-colors shadow-sm">확정</button>
-                        <button onclick="bulkUpdateStatus('반납완료')" class="text-[14px] font-bold bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 px-8 py-2.5 min-w-[84px] rounded-lg transition-colors shadow-sm">반납</button>
-                        <button onclick="bulkUpdateStatus('대기')" class="text-[14px] font-bold bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-800 px-8 py-2.5 min-w-[84px] rounded-lg transition-colors shadow-sm">대기</button>
-                        <button onclick="bulkUpdateStatus('취소')" class="text-[14px] font-bold bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 px-8 py-2.5 min-w-[84px] rounded-lg transition-colors shadow-sm">취소</button>
+                        <button onclick="bulkUpdateStatus('확정')" class="status-chg-btn text-[14px] font-bold bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-800 px-8 py-2.5 min-w-[84px] rounded-lg transition-colors shadow-sm">확정</button>
+                        <button onclick="bulkUpdateStatus('반납완료')" class="status-chg-btn text-[14px] font-bold bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 px-8 py-2.5 min-w-[84px] rounded-lg transition-colors shadow-sm">반납</button>
+                        <button onclick="bulkUpdateStatus('대기')" class="status-chg-btn text-[14px] font-bold bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-800 px-8 py-2.5 min-w-[84px] rounded-lg transition-colors shadow-sm">대기</button>
+                        <button onclick="bulkUpdateStatus('취소')" class="status-chg-btn text-[14px] font-bold bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 px-8 py-2.5 min-w-[84px] rounded-lg transition-colors shadow-sm">취소</button>
                         
-                        <div class="w-px h-5 bg-slate-200 mx-2"></div>
-                        <button onclick="bulkDeleteRecords()" class="text-[14px] font-bold bg-white border border-rose-200 text-rose-500 hover:bg-rose-50 hover:border-rose-300 px-6 py-2.5 min-w-[84px] rounded-lg transition-colors shrink-0 shadow-sm">삭제</button>
+                        <div class="status-divider w-px h-5 bg-slate-200 mx-2"></div>
+                        <button onclick="bulkDeleteRecords()" class="status-chg-btn text-[14px] font-bold bg-white border border-rose-200 text-rose-500 hover:bg-rose-50 hover:border-rose-300 px-6 py-2.5 min-w-[84px] rounded-lg transition-colors shrink-0 shadow-sm">삭제</button>
                     </div>
                     
                     <div class="flex flex-wrap items-center justify-start gap-2 w-full mt-1">
                         <span class="text-[11px] font-black text-slate-400 w-12 shrink-0">추가작업</span>
-                        <button onclick="copyForPostOffice()" class="text-[13px] font-bold bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-800 px-4 py-2 rounded-lg transition-colors shadow-sm flex items-center gap-1.5" title="대여모델/이름/우편번호/주소/연락처 복사">
+                        <button onclick="copyForPostOffice()" class="extra-action-btn text-[13px] font-bold bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-800 px-4 py-2 rounded-lg transition-colors shadow-sm flex items-center gap-1.5" title="대여모델/이름/우편번호/주소/연락처 복사">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
                             우체국 배송등록
                         </button>
-                        <button onclick="window.open('https://biz.epost.go.kr/ui/index.jsp', '_blank')" class="text-[13px] font-bold bg-red-50 hover:bg-red-100 border border-red-200 text-red-800 px-4 py-2 rounded-lg transition-colors shadow-sm flex items-center gap-1.5" title="새 탭에서 우체국 기업택배 열기">
+                        <button onclick="window.open('https://biz.epost.go.kr/ui/index.jsp', '_blank')" class="extra-action-btn text-[13px] font-bold bg-red-50 hover:bg-red-100 border border-red-200 text-red-800 px-4 py-2 rounded-lg transition-colors shadow-sm flex items-center gap-1.5" title="새 탭에서 우체국 기업택배 열기">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
                             계약택배 이동
                         </button>
-                        <button onclick="openBulkTrackingModal()" class="text-[13px] font-bold bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 px-4 py-2 rounded-lg transition-colors shadow-sm flex items-center gap-1.5">
+                        <button onclick="openBulkTrackingModal()" class="extra-action-btn text-[13px] font-bold bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 px-4 py-2 rounded-lg transition-colors shadow-sm flex items-center gap-1.5">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> 
                             송장 일괄입력
                         </button>
@@ -740,9 +815,9 @@
 
     <!-- 📱 모바일 전용: 필터 드로어 오버레이 & 플로팅 버튼 -->
     <div id="filter-overlay" onclick="closeFilterDrawer()"></div>
-    <button id="filter-fab" onclick="openFilterDrawer()">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
-        필터
+    <button id="filter-fab" onclick="openFilterDrawer()" title="필터 열기">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+        <span class="fab-label">필터</span>
     </button>
 
     <!-- 📱 모바일 전용: 더보기 메뉴 시트 -->
@@ -3168,7 +3243,7 @@
 
                     <div data-cell="model" class="w-36 shrink-0 flex flex-col justify-center pr-2">
                         <div onclick="event.stopPropagation()" title="클릭하여 기기 바로 배정 (엔터 누르면 다음 줄로 이동)" class="w-full">
-                            <div id="model-display-${item.row}" class="bg-white text-slate-800 px-2 py-1.5 rounded-lg font-black text-[14px] border border-slate-300 cursor-pointer hover:bg-blue-50 hover:border-blue-400 hover:text-blue-700 transition-all truncate shadow-sm text-center w-full" onclick="enableInlineEdit(event, '${item.row}')">📱 ${displayModel || '미정'}</div>
+                            <div id="model-display-${item.row}" class="model-chip bg-white text-slate-800 px-2 py-1.5 rounded-lg font-black text-[14px] border border-slate-300 cursor-pointer hover:bg-blue-50 hover:border-blue-400 hover:text-blue-700 transition-all truncate shadow-sm text-center w-full" onclick="enableInlineEdit(event, '${item.row}')">📱 ${displayModel || '미정'}</div>
                         </div>
                         ${(hasBattery || isBackup || isExtension) ? `
                         <div class="flex items-center gap-1 mt-1.5 flex-wrap justify-center">
@@ -3180,13 +3255,13 @@
                     </div>
                     
                     <div data-cell="customer" class="w-40 shrink-0 flex flex-col justify-center min-w-0 pr-2">
-                        <div class="flex items-center gap-1.5">
-                            <span class="text-[15px] font-black text-slate-900 truncate">${item.name}</span>
+                        <div class="cust-name-row flex items-center gap-1.5">
+                            <span class="cust-name text-[15px] font-black text-slate-900 truncate">${item.name}</span>
                             ${duplicateBadgeHtml}
                             ${hasMemo ? `<span class="text-[10px] bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded font-bold shadow-sm cursor-help shrink-0" title="${item.memo}">📝 메모</span>` : ''}
                         </div>
-                        <div class="flex items-center mt-1 text-slate-500 font-bold text-[13px] font-tnum whitespace-nowrap">
-                            <span>${item.phone || '-'}</span>
+                        <div class="cust-phone-row flex items-center mt-1 text-slate-500 font-bold text-[13px] font-tnum whitespace-nowrap">
+                            <span class="cust-phone">${item.phone || '-'}</span>
                         </div>
                     </div>
                     
@@ -3213,8 +3288,8 @@
                     </div>
                     
                     <div data-cell="price" class="w-[72px] shrink-0 flex flex-col justify-center items-start">
-                        <div class="text-[13px] font-black text-slate-900 font-tnum truncate w-full">${price}</div>
-                        <div class="text-[11px] font-bold px-1.5 py-0.5 rounded mt-0.5 ${payBadgeClass}">${payShort}</div>
+                        <div class="price-amount text-[13px] font-black text-slate-900 font-tnum truncate w-full">${price}</div>
+                        <div class="pay-badge text-[11px] font-bold px-1.5 py-0.5 rounded mt-0.5 ${payBadgeClass}">${payShort}</div>
                     </div>
 
                     <div data-cell="tracking" class="w-24 shrink-0 flex flex-col justify-center items-center pl-2 border-l border-slate-100 border-dashed">
