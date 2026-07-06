@@ -3,6 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+    /* 실제 터치 기기(폰)면 화면폭과 무관하게 모바일 레이아웃 강제.
+       "데스크톱 사이트 보기"가 켜져 폭을 넓게 보고해도 정상 동작하도록 함. */
+    (function () {
+        try {
+            var mm = window.matchMedia || null;
+            var coarse = mm && mm('(pointer: coarse)').matches;
+            var touch = (navigator.maxTouchPoints || 0) > 0 || ('ontouchstart' in window);
+            var minDim = Math.min(screen.width || 9999, screen.height || 9999);
+            var uaMobile = (navigator.userAgentData && navigator.userAgentData.mobile) ||
+                           /Android|iPhone|iPad|iPod|Mobile|Silk/i.test(navigator.userAgent || '');
+            if (uaMobile || ((coarse || touch) && minDim <= 900)) {
+                document.documentElement.classList.add('force-mobile');
+            }
+        } catch (e) {}
+    })();
+    </script>
     <title>예약 관리자 (PC 대시보드)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -136,6 +153,285 @@
         .svc-header.active { background-color: #EAB308 !important; border-color: #CA8A04 !important; }
         .svc-header.active:hover { background-color: #CA8A04 !important; }
         .svc-header.active * { color: #FFFFFF !important; }
+
+        /* ============================================================
+           📱 모바일 최적화 (≤768px). 데스크톱(769px↑)은 기존 그대로 유지
+           ============================================================ */
+
+        /* no-scrollbar 유틸 (CDN Tailwind 미포함 대비) */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* 모바일 전용 요소는 데스크톱에서 숨김 */
+        #filter-fab, #filter-overlay, #mobile-menu-sheet, #mobile-menu-overlay,
+        .mobile-only, .drawer-close { display: none; }
+
+        @media (max-width: 768px) {
+            body { overflow-y: auto; }
+            body.modal-open { padding-right: 0 !important; }
+
+            /* ---------- 상단 헤더 ---------- */
+            header.mobile-header { height: auto !important; min-height: 60px; }
+            header.mobile-header > div { padding: 10px 12px !important; }
+            .hdr-logo { margin-right: 8px !important; }
+            .hdr-logo .logo-text, .mobile-hide, .btn-label { display: none !important; }
+            #hdr-actions { flex: 1 1 auto; gap: 8px !important; flex-wrap: nowrap !important; }
+            .hdr-search { width: auto !important; flex: 1 1 auto !important; min-width: 0; }
+            .hdr-core { padding-left: 12px !important; padding-right: 12px !important; }
+            .hdr-more {
+                display: flex !important; align-items: center; justify-content: center;
+                height: 44px; width: 44px; flex-shrink: 0; font-size: 22px; font-weight: 900;
+                line-height: 1; color: #64748b; background: #f1f5f9; border: 1px solid #e2e8f0;
+                border-radius: 14px; cursor: pointer;
+            }
+
+            /* ---------- 메인 레이아웃 ---------- */
+            .main-wrap { flex-direction: column !important; gap: 0 !important; padding: 12px !important; }
+            main.mobile-main { width: 100% !important; }
+
+            /* ---------- 필터 사이드바 → 슬라이드 드로어 ---------- */
+            #filter-sidebar {
+                position: fixed !important; top: 0; left: 0; bottom: 0;
+                width: 86vw; max-width: 360px; height: 100dvh;
+                background: var(--bg-color); z-index: 320;
+                padding: 14px 14px 48px; overflow-y: auto; gap: 14px !important;
+                transform: translateX(-100%);
+                transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+                box-shadow: 8px 0 30px -8px rgba(0, 0, 0, 0.25);
+            }
+            #filter-sidebar.open { transform: translateX(0); }
+            .drawer-close {
+                display: flex !important; align-items: center; justify-content: space-between;
+                font-size: 16px; font-weight: 900; color: #1e293b; padding: 2px 2px 4px;
+                position: sticky; top: 0; background: var(--bg-color); z-index: 2;
+            }
+            .drawer-close button {
+                width: 34px; height: 34px; border-radius: 10px; background: #fff;
+                border: 1px solid #e2e8f0; font-size: 18px; color: #475569; cursor: pointer;
+            }
+            #filter-overlay {
+                display: block; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+                z-index: 310; opacity: 0; pointer-events: none; transition: opacity 0.28s;
+            }
+            #filter-overlay.open { opacity: 1; pointer-events: auto; }
+            #filter-fab {
+                display: flex; align-items: center; gap: 6px;
+                position: fixed; left: 16px; bottom: 20px; z-index: 300;
+                background: #4f46e5; color: #fff; border: none;
+                padding: 13px 18px; border-radius: 50px; font-size: 14px; font-weight: 800;
+                box-shadow: 0 8px 24px -4px rgba(79, 70, 229, 0.5); cursor: pointer;
+            }
+
+            /* ---------- 데스크톱 리스트 헤더(컬럼) 숨김 ---------- */
+            #list-header { display: none !important; }
+
+            /* ---------- 리스트 로우 → 세로 카드 ---------- */
+            .list-row {
+                display: grid !important;
+                grid-template-columns: auto 1fr auto !important;
+                grid-template-areas:
+                    "check status time"
+                    "model model  model"
+                    "cust  cust   cust"
+                    "sched sched  sched"
+                    "addr  addr   addr"
+                    "price price  track" !important;
+                align-items: center !important;
+                gap: 9px 10px !important;
+                padding: 12px 14px 12px 18px !important;
+                min-height: 0 !important;
+            }
+            .list-row:hover { transform: none !important; }
+            .list-row > [data-cell] { width: auto !important; min-width: 0 !important; }
+
+            .list-row [data-cell="check"]    { grid-area: check; justify-self: start; padding-left: 0 !important; }
+            .list-row [data-cell="status"]   { grid-area: status; justify-self: start; }
+            .list-row [data-cell="status"] .status-badge { width: auto !important; }
+            .list-row [data-cell="time"]     { grid-area: time; justify-self: end; text-align: right !important; }
+            .list-row [data-cell="model"]    { grid-area: model; padding-right: 0 !important; }
+            .list-row [data-cell="customer"] { grid-area: cust; }
+            .list-row [data-cell="schedule"] { grid-area: sched; }
+            .list-row [data-cell="address"]  {
+                grid-area: addr; padding: 8px 10px !important;
+                background: #f8fafc; border: 1px solid #eef2f7; border-radius: 10px;
+            }
+            .list-row [data-cell="price"]    {
+                grid-area: price; flex-direction: row !important;
+                align-items: center !important; gap: 8px !important;
+            }
+            .list-row [data-cell="tracking"] {
+                grid-area: track; border-left: none !important; padding-left: 0 !important;
+                align-items: flex-end !important;
+            }
+            /* 주소: 길면 2줄까지 표시 후 …으로 생략 */
+            .list-row [data-cell="address"] .addr-text {
+                white-space: normal !important; display: -webkit-box;
+                -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+                overflow: hidden; text-overflow: ellipsis;
+            }
+
+            /* ---------- 일괄 처리 바 ---------- */
+            #bulk-action-bar { padding: 12px !important; }
+            #bulk-action-bar button { white-space: nowrap; }
+
+            /* ---------- 모달 (하단 시트형) ---------- */
+            #modal-root, #calendar-modal-root { align-items: flex-end !important; }
+            .center-modal {
+                max-width: 100% !important; max-height: 94dvh !important;
+                border-radius: 20px 20px 0 0 !important;
+            }
+            .scroll-area { padding: 16px !important; }
+            .center-modal .px-8 { padding-left: 16px !important; padding-right: 16px !important; }
+
+            /* ---------- 모바일 메뉴 시트 ---------- */
+            #mobile-menu-overlay {
+                display: block; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+                z-index: 340; opacity: 0; pointer-events: none; transition: opacity 0.25s;
+            }
+            #mobile-menu-overlay.open { opacity: 1; pointer-events: auto; }
+            #mobile-menu-sheet {
+                display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 350;
+                background: #fff; border-radius: 20px 20px 0 0; padding: 8px 12px calc(16px + env(safe-area-inset-bottom));
+                transform: translateY(110%); transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+                box-shadow: 0 -8px 30px -8px rgba(0, 0, 0, 0.25);
+            }
+            #mobile-menu-sheet.open { transform: translateY(0); }
+            #mobile-menu-sheet .mm-title {
+                text-align: center; font-size: 13px; font-weight: 800; color: #94a3b8; padding: 10px 0 6px;
+            }
+            #mobile-menu-sheet button {
+                width: 100%; text-align: left; padding: 15px 14px; border-radius: 12px;
+                font-size: 15px; font-weight: 700; color: #1e293b; background: transparent;
+                border: none; cursor: pointer; display: flex; align-items: center; gap: 10px;
+            }
+            #mobile-menu-sheet button:active { background: #f1f5f9; }
+            #mobile-menu-sheet button.mm-logout { color: #e11d48; }
+        }
+
+        /* 터치 기기(실제 폰)면 화면폭과 무관하게 모바일 레이아웃 강제 — 데스크톱 사이트 보기 대응 */
+        html.force-mobile { }
+            html.force-mobile body { overflow-y: auto; }
+            html.force-mobile body.modal-open { padding-right: 0 !important; }
+            html.force-mobile header.mobile-header { height: auto !important; min-height: 60px; }
+            html.force-mobile header.mobile-header > div { padding: 10px 12px !important; }
+            html.force-mobile .hdr-logo { margin-right: 8px !important; }
+            html.force-mobile .hdr-logo .logo-text, html.force-mobile .mobile-hide, html.force-mobile .btn-label { display: none !important; }
+            html.force-mobile #hdr-actions { flex: 1 1 auto; gap: 8px !important; flex-wrap: nowrap !important; }
+            html.force-mobile .hdr-search { width: auto !important; flex: 1 1 auto !important; min-width: 0; }
+            html.force-mobile .hdr-core { padding-left: 12px !important; padding-right: 12px !important; }
+            html.force-mobile .hdr-more {
+                            display: flex !important; align-items: center; justify-content: center;
+                            height: 44px; width: 44px; flex-shrink: 0; font-size: 22px; font-weight: 900;
+                            line-height: 1; color: #64748b; background: #f1f5f9; border: 1px solid #e2e8f0;
+                            border-radius: 14px; cursor: pointer;
+                        }
+            html.force-mobile .main-wrap { flex-direction: column !important; gap: 0 !important; padding: 12px !important; }
+            html.force-mobile main.mobile-main { width: 100% !important; }
+            html.force-mobile #filter-sidebar {
+                            position: fixed !important; top: 0; left: 0; bottom: 0;
+                            width: 86vw; max-width: 360px; height: 100dvh;
+                            background: var(--bg-color); z-index: 320;
+                            padding: 14px 14px 48px; overflow-y: auto; gap: 14px !important;
+                            transform: translateX(-100%);
+                            transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+                            box-shadow: 8px 0 30px -8px rgba(0, 0, 0, 0.25);
+                        }
+            html.force-mobile #filter-sidebar.open { transform: translateX(0); }
+            html.force-mobile .drawer-close {
+                            display: flex !important; align-items: center; justify-content: space-between;
+                            font-size: 16px; font-weight: 900; color: #1e293b; padding: 2px 2px 4px;
+                            position: sticky; top: 0; background: var(--bg-color); z-index: 2;
+                        }
+            html.force-mobile .drawer-close button {
+                            width: 34px; height: 34px; border-radius: 10px; background: #fff;
+                            border: 1px solid #e2e8f0; font-size: 18px; color: #475569; cursor: pointer;
+                        }
+            html.force-mobile #filter-overlay {
+                            display: block; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+                            z-index: 310; opacity: 0; pointer-events: none; transition: opacity 0.28s;
+                        }
+            html.force-mobile #filter-overlay.open { opacity: 1; pointer-events: auto; }
+            html.force-mobile #filter-fab {
+                            display: flex; align-items: center; gap: 6px;
+                            position: fixed; left: 16px; bottom: 20px; z-index: 300;
+                            background: #4f46e5; color: #fff; border: none;
+                            padding: 13px 18px; border-radius: 50px; font-size: 14px; font-weight: 800;
+                            box-shadow: 0 8px 24px -4px rgba(79, 70, 229, 0.5); cursor: pointer;
+                        }
+            html.force-mobile #list-header { display: none !important; }
+            html.force-mobile .list-row {
+                            display: grid !important;
+                            grid-template-columns: auto 1fr auto !important;
+                            grid-template-areas:
+                                "check status time"
+                                "model model  model"
+                                "cust  cust   cust"
+                                "sched sched  sched"
+                                "addr  addr   addr"
+                                "price price  track" !important;
+                            align-items: center !important;
+                            gap: 9px 10px !important;
+                            padding: 12px 14px 12px 18px !important;
+                            min-height: 0 !important;
+                        }
+            html.force-mobile .list-row:hover { transform: none !important; }
+            html.force-mobile .list-row > [data-cell] { width: auto !important; min-width: 0 !important; }
+            html.force-mobile .list-row [data-cell="check"] { grid-area: check; justify-self: start; padding-left: 0 !important; }
+            html.force-mobile .list-row [data-cell="status"] { grid-area: status; justify-self: start; }
+            html.force-mobile .list-row [data-cell="status"] .status-badge { width: auto !important; }
+            html.force-mobile .list-row [data-cell="time"] { grid-area: time; justify-self: end; text-align: right !important; }
+            html.force-mobile .list-row [data-cell="model"] { grid-area: model; padding-right: 0 !important; }
+            html.force-mobile .list-row [data-cell="customer"] { grid-area: cust; }
+            html.force-mobile .list-row [data-cell="schedule"] { grid-area: sched; }
+            html.force-mobile .list-row [data-cell="address"] {
+                            grid-area: addr; padding: 8px 10px !important;
+                            background: #f8fafc; border: 1px solid #eef2f7; border-radius: 10px;
+                        }
+            html.force-mobile .list-row [data-cell="price"] {
+                            grid-area: price; flex-direction: row !important;
+                            align-items: center !important; gap: 8px !important;
+                        }
+            html.force-mobile .list-row [data-cell="tracking"] {
+                            grid-area: track; border-left: none !important; padding-left: 0 !important;
+                            align-items: flex-end !important;
+                        }
+            html.force-mobile .list-row [data-cell="address"] .addr-text {
+                            white-space: normal !important; display: -webkit-box;
+                            -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+                            overflow: hidden; text-overflow: ellipsis;
+                        }
+            html.force-mobile #bulk-action-bar { padding: 12px !important; }
+            html.force-mobile #bulk-action-bar button { white-space: nowrap; }
+            html.force-mobile #modal-root, html.force-mobile #calendar-modal-root { align-items: flex-end !important; }
+            html.force-mobile .center-modal {
+                            max-width: 100% !important; max-height: 94dvh !important;
+                            border-radius: 20px 20px 0 0 !important;
+                        }
+            html.force-mobile .scroll-area { padding: 16px !important; }
+            html.force-mobile .center-modal .px-8 { padding-left: 16px !important; padding-right: 16px !important; }
+            html.force-mobile #mobile-menu-overlay {
+                            display: block; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+                            z-index: 340; opacity: 0; pointer-events: none; transition: opacity 0.25s;
+                        }
+            html.force-mobile #mobile-menu-overlay.open { opacity: 1; pointer-events: auto; }
+            html.force-mobile #mobile-menu-sheet {
+                            display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 350;
+                            background: #fff; border-radius: 20px 20px 0 0; padding: 8px 12px calc(16px + env(safe-area-inset-bottom));
+                            transform: translateY(110%); transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+                            box-shadow: 0 -8px 30px -8px rgba(0, 0, 0, 0.25);
+                        }
+            html.force-mobile #mobile-menu-sheet.open { transform: translateY(0); }
+            html.force-mobile #mobile-menu-sheet .mm-title {
+                            text-align: center; font-size: 13px; font-weight: 800; color: #94a3b8; padding: 10px 0 6px;
+                        }
+            html.force-mobile #mobile-menu-sheet button {
+                            width: 100%; text-align: left; padding: 15px 14px; border-radius: 12px;
+                            font-size: 15px; font-weight: 700; color: #1e293b; background: transparent;
+                            border: none; cursor: pointer; display: flex; align-items: center; gap: 10px;
+                        }
+            html.force-mobile #mobile-menu-sheet button:active { background: #f1f5f9; }
+            html.force-mobile #mobile-menu-sheet button.mm-logout { color: #e11d48; }
+
     </style>
 </head>
 <body>
@@ -158,41 +454,42 @@
     </div>
 
     <!-- 상단 네비게이션 바 -->
-    <header class="bg-white/90 backdrop-blur-xl border-b border-indigo-100/50 relative z-40 shadow-[0_4px_20px_-10px_rgba(99,102,241,0.08)] h-[72px] flex items-center transition-all">
+    <header class="mobile-header bg-white/90 backdrop-blur-xl border-b border-indigo-100/50 relative z-40 shadow-[0_4px_20px_-10px_rgba(99,102,241,0.08)] h-[72px] flex items-center transition-all">
       <div class="max-w-[1800px] w-full mx-auto flex items-center px-6">
-        <div class="flex items-center gap-3 shrink-0 mr-6">
-            <span class="text-xl font-black text-indigo-950 tracking-tight flex items-center gap-1.5 whitespace-nowrap"><span class="text-2xl drop-shadow-sm">🗂️</span> 대시보드</span>
-            <span class="bg-pink-100 text-pink-500 text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-sm">v1.3</span>
+        <div class="hdr-logo flex items-center gap-3 shrink-0 mr-6">
+            <span class="text-xl font-black text-indigo-950 tracking-tight flex items-center gap-1.5 whitespace-nowrap"><span class="text-2xl drop-shadow-sm">🗂️</span> <span class="logo-text">대시보드</span></span>
+            <span class="mobile-hide bg-pink-100 text-pink-500 text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-sm">v1.3</span>
         </div>
         
-        <div class="flex-1 flex items-center gap-2 flex-nowrap">
-            <div class="w-[224px] shrink-0">
+        <div id="hdr-actions" class="flex-1 flex items-center gap-2 flex-nowrap">
+            <div class="hdr-search w-[224px] shrink-0">
                 <div class="relative flex items-center bg-indigo-50/50 border border-indigo-100 rounded-[20px] overflow-hidden focus-within:ring-2 focus-within:ring-indigo-300 focus-within:bg-white transition-all shadow-inner">
                     <svg class="text-indigo-300 ml-4 shrink-0" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                     <input type="text" id="search-input" onkeyup="debouncedFilter()" placeholder="검색 (이름, 송장, 메모 등)" class="w-full bg-transparent border-none text-[13px] font-bold text-indigo-900 placeholder-indigo-300 outline-none p-3 pl-2.5">
                 </div>
             </div>
 
-            <button onclick="openAddModal()" class="h-11 px-4 flex items-center gap-2 bg-violet-500 hover:bg-violet-600 rounded-[18px] text-[13px] font-bold text-white shadow-md shadow-violet-200 transition-all whitespace-nowrap shrink-0">
+            <button onclick="openAddModal()" class="hdr-core h-11 px-4 flex items-center gap-2 bg-violet-500 hover:bg-violet-600 rounded-[18px] text-[13px] font-bold text-white shadow-md shadow-violet-200 transition-all whitespace-nowrap shrink-0">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                예약 생성
+                <span class="btn-label">예약 생성</span>
             </button>
-            <button onclick="fetchData()" class="h-11 px-4 flex items-center gap-2 bg-sky-400 hover:bg-sky-500 rounded-[18px] text-[13px] font-bold text-white shadow-md shadow-sky-200 transition-all whitespace-nowrap shrink-0">
+            <button onclick="fetchData()" class="hdr-core h-11 px-4 flex items-center gap-2 bg-sky-400 hover:bg-sky-500 rounded-[18px] text-[13px] font-bold text-white shadow-md shadow-sky-200 transition-all whitespace-nowrap shrink-0">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
-                최신 정보 불러오기
+                <span class="btn-label">최신 정보 불러오기</span>
             </button>
-            <button onclick="toggleSortMode()" class="h-11 px-4 flex items-center gap-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100/80 rounded-[18px] text-[13px] font-bold text-indigo-600 shadow-sm transition-all whitespace-nowrap shrink-0">
+            <button onclick="toggleMobileMenu()" class="mobile-only hdr-more" title="더보기">⋯</button>
+            <button onclick="toggleSortMode()" class="mobile-hide h-11 px-4 flex items-center gap-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100/80 rounded-[18px] text-[13px] font-bold text-indigo-600 shadow-sm transition-all whitespace-nowrap shrink-0">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-400"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>
                 정렬: <span id="sort-mode-text" class="text-indigo-800 font-black">최신순</span>
             </button>
-            <button onclick="openReviewManager()" class="h-11 px-4 flex items-center gap-2 bg-amber-400 hover:bg-amber-500 rounded-[18px] text-[13px] font-bold text-white shadow-md shadow-amber-200 transition-all whitespace-nowrap shrink-0">
+            <button onclick="openReviewManager()" class="mobile-hide h-11 px-4 flex items-center gap-2 bg-amber-400 hover:bg-amber-500 rounded-[18px] text-[13px] font-bold text-white shadow-md shadow-amber-200 transition-all whitespace-nowrap shrink-0">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2l2.9 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14 2 9.27l7.1-1.01z"/></svg>
                 리뷰 관리
             </button>
-            <button onclick="openTodayPostModal()" class="h-11 px-4 flex items-center gap-2 bg-orange-400 hover:bg-orange-500 rounded-[18px] text-[13px] font-bold text-white shadow-md shadow-orange-200 transition-all whitespace-nowrap shrink-0">
+            <button onclick="openTodayPostModal()" class="mobile-hide h-11 px-4 flex items-center gap-2 bg-orange-400 hover:bg-orange-500 rounded-[18px] text-[13px] font-bold text-white shadow-md shadow-orange-200 transition-all whitespace-nowrap shrink-0">
                 📦 오늘 등록 목록
             </button>
-            <button onclick="doLogout()" class="h-11 px-4 flex items-center gap-2 bg-white hover:bg-rose-50 border border-rose-100 rounded-[18px] text-[13px] font-bold text-rose-500 shadow-sm transition-all whitespace-nowrap shrink-0">
+            <button onclick="doLogout()" class="mobile-hide h-11 px-4 flex items-center gap-2 bg-white hover:bg-rose-50 border border-rose-100 rounded-[18px] text-[13px] font-bold text-rose-500 shadow-sm transition-all whitespace-nowrap shrink-0">
                 로그아웃
             </button>
         </div>
@@ -200,11 +497,16 @@
     </header>
 
     <!-- 메인 레이아웃 -->
-    <div class="max-w-[1800px] mx-auto flex gap-6 p-6">
+    <div class="main-wrap max-w-[1800px] mx-auto flex gap-6 p-6">
         
         <!-- 왼쪽 사이드바 (고정 필터 영역) -->
-        <aside class="w-[300px] shrink-0 flex flex-col gap-5">
+        <aside id="filter-sidebar" class="w-[300px] shrink-0 flex flex-col gap-5">
             
+            <div class="drawer-close">
+                <span>🔍 검색 / 필터</span>
+                <button onclick="closeFilterDrawer()" aria-label="닫기">✕</button>
+            </div>
+
             <div class="flex flex-col gap-2 mb-1">
                 <button onclick="resetAllFilters()" class="w-full bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-500 hover:text-slate-700 py-3 rounded-2xl font-bold shadow-sm transition-all flex items-center justify-center gap-2 text-[13px]">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
@@ -346,7 +648,7 @@
         </aside>
 
         <!-- 오른쪽 메인 콘텐츠 -->
-        <main class="flex-1 relative">
+        <main class="mobile-main flex-1 relative">
             <div id="loading" class="flex flex-col items-center justify-center py-40 h-full bg-white rounded-2xl border border-slate-200 shadow-sm">
                 <div class="w-12 h-12 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin mb-4"></div>
                 <p class="text-sm font-bold text-slate-500">서버에서 예약 데이터를 불러오는 중입니다...</p>
@@ -434,6 +736,23 @@
 
             <div id="list-container" class="flex flex-col gap-2.5 pb-24"></div>
         </main>
+    </div>
+
+    <!-- 📱 모바일 전용: 필터 드로어 오버레이 & 플로팅 버튼 -->
+    <div id="filter-overlay" onclick="closeFilterDrawer()"></div>
+    <button id="filter-fab" onclick="openFilterDrawer()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+        필터
+    </button>
+
+    <!-- 📱 모바일 전용: 더보기 메뉴 시트 -->
+    <div id="mobile-menu-overlay" onclick="closeMobileMenu()"></div>
+    <div id="mobile-menu-sheet">
+        <div class="mm-title">메뉴</div>
+        <button onclick="toggleSortMode()">↕️ 정렬: <span id="sort-mode-text-m" class="font-black text-indigo-700">최신순</span></button>
+        <button onclick="openReviewManager(); closeMobileMenu();">⭐ 리뷰 관리</button>
+        <button onclick="openTodayPostModal(); closeMobileMenu();">📦 오늘 등록 목록</button>
+        <button class="mm-logout" onclick="doLogout()">🚪 로그아웃</button>
     </div>
 
     <!-- 상세 정보 모달 (PC 폼) -->
@@ -793,6 +1112,28 @@
             startApp();
         }
         async function doLogout() { await sb.auth.signOut(); location.reload(); }
+
+        /* ===== 📱 모바일 UI 컨트롤 ===== */
+        function openFilterDrawer() {
+            document.getElementById('filter-sidebar').classList.add('open');
+            document.getElementById('filter-overlay').classList.add('open');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeFilterDrawer() {
+            document.getElementById('filter-sidebar').classList.remove('open');
+            document.getElementById('filter-overlay').classList.remove('open');
+            document.body.style.overflow = '';
+        }
+        function toggleMobileMenu() {
+            const s = document.getElementById('mobile-menu-sheet');
+            const o = document.getElementById('mobile-menu-overlay');
+            const open = s.classList.toggle('open');
+            o.classList.toggle('open', open);
+        }
+        function closeMobileMenu() {
+            document.getElementById('mobile-menu-sheet').classList.remove('open');
+            document.getElementById('mobile-menu-overlay').classList.remove('open');
+        }
 
         // ===== 일괄작업 묶음 처리 (동시 실행으로 빠르게) =====
         function buildPatch(u) {
@@ -1496,6 +1837,8 @@
                     btnText.innerText = `${names[currentSortField] || ''} ${dir}`;
                 }
             }
+            const btnTextM = document.getElementById('sort-mode-text-m');
+            if (btnTextM && btnText) btnTextM.innerText = btnText.innerText;
         }
 
         function sortLogic(a, b) {
@@ -2811,19 +3154,19 @@
                 card.innerHTML = `
                     <div class="absolute left-0 top-0 bottom-0 w-1.5 ${accentColor} z-20"></div>
                     
-                    <div class="w-16 self-stretch flex items-center justify-center shrink-0 pl-1.5 cursor-pointer transition-colors z-10" onclick="toggleRowSelection(event, '${item.row}')">
+                    <div data-cell="check" class="w-16 self-stretch flex items-center justify-center shrink-0 pl-1.5 cursor-pointer transition-colors z-10" onclick="toggleRowSelection(event, '${item.row}')">
                         <input type="checkbox" ${isSelected ? 'checked' : ''} class="checkbox-custom pointer-events-none transform scale-110">
                     </div>
 
-                    <div class="w-14 text-center shrink-0">
+                    <div data-cell="status" class="w-14 text-center shrink-0">
                         <span class="status-badge ${badgeClass} w-full py-1.5 text-[11px]">${badgeText}</span>
                     </div>
 
-                    <div class="w-20 shrink-0 text-center text-[11px] leading-tight text-slate-400 font-bold font-tnum">
+                    <div data-cell="time" class="w-20 shrink-0 text-center text-[11px] leading-tight text-slate-400 font-bold font-tnum">
                         ${time}
                     </div>
 
-                    <div class="w-36 shrink-0 flex flex-col justify-center pr-2">
+                    <div data-cell="model" class="w-36 shrink-0 flex flex-col justify-center pr-2">
                         <div onclick="event.stopPropagation()" title="클릭하여 기기 바로 배정 (엔터 누르면 다음 줄로 이동)" class="w-full">
                             <div id="model-display-${item.row}" class="bg-white text-slate-800 px-2 py-1.5 rounded-lg font-black text-[14px] border border-slate-300 cursor-pointer hover:bg-blue-50 hover:border-blue-400 hover:text-blue-700 transition-all truncate shadow-sm text-center w-full" onclick="enableInlineEdit(event, '${item.row}')">📱 ${displayModel || '미정'}</div>
                         </div>
@@ -2836,7 +3179,7 @@
                         ` : ''}
                     </div>
                     
-                    <div class="w-40 shrink-0 flex flex-col justify-center min-w-0 pr-2">
+                    <div data-cell="customer" class="w-40 shrink-0 flex flex-col justify-center min-w-0 pr-2">
                         <div class="flex items-center gap-1.5">
                             <span class="text-[15px] font-black text-slate-900 truncate">${item.name}</span>
                             ${duplicateBadgeHtml}
@@ -2847,7 +3190,7 @@
                         </div>
                     </div>
                     
-                    <div class="w-64 shrink-0 flex flex-col justify-center gap-1.5">
+                    <div data-cell="schedule" class="w-64 shrink-0 flex flex-col justify-center gap-1.5">
                         <div class="flex items-center text-[13.5px] font-black text-slate-800 font-tnum tracking-tight">
                             <span>${start} <span class="text-blue-600 font-bold text-[12px]">(${item.delivery || '-'})</span></span>
                             <span class="mx-1.5 text-slate-300">➔</span>
@@ -2858,23 +3201,23 @@
                         </div>
                     </div>
                     
-                    <div class="flex-1 shrink-0 flex flex-col justify-center px-2 min-w-0">
+                    <div data-cell="address" class="flex-1 shrink-0 flex flex-col justify-center px-2 min-w-0">
                         ${fullAddress.trim() ? `
                             <div class="flex items-center gap-1 mb-0.5">
                                 <span class="text-[10px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded font-tnum border border-slate-200">${item.zipCode || '우편번호 없음'}</span>
                             </div>
-                            <div class="text-[13px] font-bold text-slate-700 truncate w-full" title="${item.address || ''}">
+                            <div class="addr-text text-[13px] font-bold text-slate-700 truncate w-full" title="${item.address || ''}">
                                 ${item.address || '-'}
                             </div>
                         ` : `<span class="text-[12px] text-slate-300 font-bold">-</span>`}
                     </div>
                     
-                    <div class="w-[72px] shrink-0 flex flex-col justify-center items-start">
+                    <div data-cell="price" class="w-[72px] shrink-0 flex flex-col justify-center items-start">
                         <div class="text-[13px] font-black text-slate-900 font-tnum truncate w-full">${price}</div>
                         <div class="text-[11px] font-bold px-1.5 py-0.5 rounded mt-0.5 ${payBadgeClass}">${payShort}</div>
                     </div>
 
-                    <div class="w-24 shrink-0 flex flex-col justify-center items-center pl-2 border-l border-slate-100 border-dashed">
+                    <div data-cell="tracking" class="w-24 shrink-0 flex flex-col justify-center items-center pl-2 border-l border-slate-100 border-dashed">
                         <div class="text-[11px] font-bold text-slate-500 mb-1 whitespace-nowrap">송장 입력</div>
                         <div class="w-full flex items-center justify-center" onclick="event.stopPropagation()" title="클릭하여 송장번호 바로 입력 (엔터 누르면 다음 줄로 이동)">
                             <div id="tracking-display-${item.row}" class="bg-white px-1.5 py-1.5 rounded-lg border border-slate-200 shadow-sm text-slate-700 cursor-pointer hover:bg-blue-50 hover:border-blue-400 hover:text-blue-700 transition-colors truncate w-full text-center font-tnum text-[12px]" onclick="enableTrackingInlineEdit(event, '${item.row}')">
