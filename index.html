@@ -164,7 +164,7 @@
 
         /* 모바일 전용 요소는 데스크톱에서 숨김 */
         #filter-fab, #filter-overlay, #mobile-menu-sheet, #mobile-menu-overlay,
-        .mobile-only, .drawer-close { display: none; }
+        .mobile-only, .drawer-close, .mobile-only-acct { display: none; }
 
         @media (max-width: 768px) {
             body { overflow-y: auto; }
@@ -230,62 +230,50 @@
             /* ---------- 리스트 로우 → 세로 카드 ---------- */
             .list-row {
                 display: grid !important;
-                grid-template-columns: 68px 1fr auto !important;
+                grid-template-columns: 30px auto 1fr auto !important;
                 grid-template-areas:
-                    "check status time"
-                    "model cust   cust"
-                    "sched sched sched"
-                    "addr  addr  addr"
-                    "price price track" !important;
+                    "check status .     time"
+                    "model model  cust  cust"
+                    "sched sched  sched sched"
+                    "addr  addr   addr  addr"
+                    "price price  price track" !important;
                 align-items: center !important;
-                gap: 8px 10px !important;
-                padding: 12px 14px 12px 18px !important;
+                gap: 8px 6px !important;
+                padding: 12px 14px 12px 16px !important;
                 min-height: 0 !important;
             }
             .list-row:hover { transform: none !important; }
             .list-row > [data-cell] { width: auto !important; min-width: 0 !important; }
 
-            .list-row [data-cell="check"]    { grid-area: check; justify-self: start; padding-left: 0 !important; }
-            .list-row [data-cell="status"]   { grid-area: status; justify-self: start; }
+            /* 1) 체크박스 바로 오른쪽에 상태 배지 */
+            .list-row [data-cell="check"]  { grid-area: check; justify-self: start; justify-content: flex-start !important; padding-left: 0 !important; }
+            .list-row [data-cell="status"] { grid-area: status; justify-self: start; }
             .list-row [data-cell="status"] .status-badge { width: auto !important; }
-            .list-row [data-cell="time"]     { grid-area: time; justify-self: end; text-align: right !important; }
+            .list-row [data-cell="time"]   { grid-area: time; justify-self: end; text-align: right !important; }
 
-            /* 대여모델: 칸을 줄여서 이름/연락처와 한 줄에 표시 */
-            .list-row [data-cell="model"]    { grid-area: model; padding-right: 0 !important; align-self: center !important; }
+            /* 2) 대여모델 오른쪽에 고객명·연락처 */
+            .list-row [data-cell="model"]  { grid-area: model; justify-self: start; padding-right: 0 !important; }
+            .list-row [data-cell="model"] > div:first-child { width: auto !important; }
             .list-row [data-cell="model"] .model-chip {
-                font-size: 11px !important; padding: 6px 3px !important; letter-spacing: -0.03em;
+                font-size: 12px !important; padding: 6px 9px !important; letter-spacing: -0.02em;
+                width: auto !important; max-width: 104px;
             }
-            /* 배터리/백업/연장 미니뱃지는 모델 칸이 좁아졌으므로 모바일에서 숨김(칩 자체 이모지로 대체) */
+            /* 배터리/백업/연장 미니뱃지는 좁은 칸이라 숨김(칩 이모지로 대체) */
             .list-row [data-cell="model"] > div:nth-child(2) { display: none !important; }
 
-            /* 고객정보: 이름 + 연락처를 한 줄로 표시 */
             .list-row [data-cell="customer"] {
                 grid-area: cust; display: flex !important; flex-direction: row !important;
                 align-items: center !important; gap: 6px !important; min-width: 0; overflow: hidden;
             }
             .list-row [data-cell="customer"] .cust-name-row,
             .list-row [data-cell="customer"] .cust-phone-row { display: contents !important; }
-            .list-row [data-cell="customer"] .cust-name {
-                max-width: 96px; font-size: 13.5px !important; flex-shrink: 1;
-            }
-            .list-row [data-cell="customer"] .cust-phone {
-                white-space: nowrap !important; flex-shrink: 0; font-size: 12px !important;
-            }
+            .list-row [data-cell="customer"] .cust-name { max-width: 112px; font-size: 14px !important; flex-shrink: 1; }
+            .list-row [data-cell="customer"] .cust-phone { white-space: nowrap !important; flex-shrink: 0; font-size: 12.5px !important; }
 
             .list-row [data-cell="schedule"] { grid-area: sched; }
             .list-row [data-cell="address"]  {
                 grid-area: addr; padding: 8px 10px !important;
                 background: #f8fafc; border: 1px solid #eef2f7; border-radius: 10px;
-            }
-            .list-row [data-cell="price"]    {
-                grid-area: price; display: flex !important; flex-direction: row !important;
-                align-items: center !important; gap: 8px !important;
-            }
-            .list-row [data-cell="price"] .price-amount { flex: 1 1 auto; min-width: 0; white-space: nowrap !important; }
-            .list-row [data-cell="price"] .pay-badge { flex-shrink: 0 !important; white-space: nowrap !important; margin-top: 0 !important; }
-            .list-row [data-cell="tracking"] {
-                grid-area: track; border-left: none !important; padding-left: 0 !important;
-                align-items: flex-end !important;
             }
             /* 주소: 길면 2줄까지 표시 후 …으로 생략 */
             .list-row [data-cell="address"] .addr-text {
@@ -293,6 +281,24 @@
                 -webkit-line-clamp: 2; -webkit-box-orient: vertical;
                 overflow: hidden; text-overflow: ellipsis;
             }
+            /* 계좌번호: 모바일 상세 카드에서만 노출 */
+            .mobile-only-acct { display: block !important; }
+
+            /* 3·4) 금액·결제수단·송장칸: 한 줄 + 같은 높이 + 우측 정렬 */
+            .list-row [data-cell="price"] {
+                grid-area: price; display: flex !important; flex-direction: row !important;
+                align-items: center !important; justify-content: flex-end !important; gap: 8px !important;
+            }
+            .list-row [data-cell="price"] .price-amount { flex: 0 0 auto !important; white-space: nowrap !important; font-size: 15px !important; }
+            .list-row [data-cell="price"] .pay-badge { flex: 0 0 auto !important; white-space: nowrap !important; margin-top: 0 !important; }
+            .list-row [data-cell="tracking"] {
+                grid-area: track; display: flex !important; flex-direction: row !important;
+                align-items: center !important; justify-content: flex-end !important;
+                border-left: none !important; padding-left: 0 !important;
+            }
+            /* '송장 입력' 라벨 숨겨 세 항목 높이 맞춤 (입력칸엔 '입력' placeholder 유지) */
+            .list-row [data-cell="tracking"] > div:first-child { display: none !important; }
+            .list-row [data-cell="tracking"] > div:last-child { width: 84px !important; }
 
             /* ---------- 일괄 처리 바 ---------- */
             #bulk-action-bar { padding: 12px !important; }
@@ -405,57 +411,45 @@
             /* ---------- 리스트 로우 → 세로 카드 ---------- */
             html.force-mobile .list-row {
                 display: grid !important;
-                grid-template-columns: 68px 1fr auto !important;
+                grid-template-columns: 30px auto 1fr auto !important;
                 grid-template-areas:
-                    "check status time"
-                    "model cust   cust"
-                    "sched sched sched"
-                    "addr  addr  addr"
-                    "price price track" !important;
+                    "check status .     time"
+                    "model model  cust  cust"
+                    "sched sched  sched sched"
+                    "addr  addr   addr  addr"
+                    "price price  price track" !important;
                 align-items: center !important;
-                gap: 8px 10px !important;
-                padding: 12px 14px 12px 18px !important;
+                gap: 8px 6px !important;
+                padding: 12px 14px 12px 16px !important;
                 min-height: 0 !important;
             }
             html.force-mobile .list-row:hover { transform: none !important; }
             html.force-mobile .list-row > [data-cell] { width: auto !important; min-width: 0 !important; }
-            html.force-mobile .list-row [data-cell="check"] { grid-area: check; justify-self: start; padding-left: 0 !important; }
+            /* 1) 체크박스 바로 오른쪽에 상태 배지 */
+            html.force-mobile .list-row [data-cell="check"] { grid-area: check; justify-self: start; justify-content: flex-start !important; padding-left: 0 !important; }
             html.force-mobile .list-row [data-cell="status"] { grid-area: status; justify-self: start; }
             html.force-mobile .list-row [data-cell="status"] .status-badge { width: auto !important; }
             html.force-mobile .list-row [data-cell="time"] { grid-area: time; justify-self: end; text-align: right !important; }
-            /* 대여모델: 칸을 줄여서 이름/연락처와 한 줄에 표시 */
-            html.force-mobile .list-row [data-cell="model"] { grid-area: model; padding-right: 0 !important; align-self: center !important; }
+            /* 2) 대여모델 오른쪽에 고객명·연락처 */
+            html.force-mobile .list-row [data-cell="model"] { grid-area: model; justify-self: start; padding-right: 0 !important; }
+            html.force-mobile .list-row [data-cell="model"] > div:first-child { width: auto !important; }
             html.force-mobile .list-row [data-cell="model"] .model-chip {
-                font-size: 11px !important; padding: 6px 3px !important; letter-spacing: -0.03em;
+                font-size: 12px !important; padding: 6px 9px !important; letter-spacing: -0.02em;
+                width: auto !important; max-width: 104px;
             }
-            /* 배터리/백업/연장 미니뱃지는 모델 칸이 좁아졌으므로 모바일에서 숨김(칩 자체 이모지로 대체) */
+            /* 배터리/백업/연장 미니뱃지는 좁은 칸이라 숨김(칩 이모지로 대체) */
             html.force-mobile .list-row [data-cell="model"] > div:nth-child(2) { display: none !important; }
-            /* 고객정보: 이름 + 연락처를 한 줄로 표시 */
             html.force-mobile .list-row [data-cell="customer"] {
                 grid-area: cust; display: flex !important; flex-direction: row !important;
                 align-items: center !important; gap: 6px !important; min-width: 0; overflow: hidden;
             }
             html.force-mobile .list-row [data-cell="customer"] .cust-name-row, html.force-mobile .list-row [data-cell="customer"] .cust-phone-row { display: contents !important; }
-            html.force-mobile .list-row [data-cell="customer"] .cust-name {
-                max-width: 96px; font-size: 13.5px !important; flex-shrink: 1;
-            }
-            html.force-mobile .list-row [data-cell="customer"] .cust-phone {
-                white-space: nowrap !important; flex-shrink: 0; font-size: 12px !important;
-            }
+            html.force-mobile .list-row [data-cell="customer"] .cust-name { max-width: 112px; font-size: 14px !important; flex-shrink: 1; }
+            html.force-mobile .list-row [data-cell="customer"] .cust-phone { white-space: nowrap !important; flex-shrink: 0; font-size: 12.5px !important; }
             html.force-mobile .list-row [data-cell="schedule"] { grid-area: sched; }
             html.force-mobile .list-row [data-cell="address"] {
                 grid-area: addr; padding: 8px 10px !important;
                 background: #f8fafc; border: 1px solid #eef2f7; border-radius: 10px;
-            }
-            html.force-mobile .list-row [data-cell="price"] {
-                grid-area: price; display: flex !important; flex-direction: row !important;
-                align-items: center !important; gap: 8px !important;
-            }
-            html.force-mobile .list-row [data-cell="price"] .price-amount { flex: 1 1 auto; min-width: 0; white-space: nowrap !important; }
-            html.force-mobile .list-row [data-cell="price"] .pay-badge { flex-shrink: 0 !important; white-space: nowrap !important; margin-top: 0 !important; }
-            html.force-mobile .list-row [data-cell="tracking"] {
-                grid-area: track; border-left: none !important; padding-left: 0 !important;
-                align-items: flex-end !important;
             }
             /* 주소: 길면 2줄까지 표시 후 …으로 생략 */
             html.force-mobile .list-row [data-cell="address"] .addr-text {
@@ -463,6 +457,23 @@
                 -webkit-line-clamp: 2; -webkit-box-orient: vertical;
                 overflow: hidden; text-overflow: ellipsis;
             }
+            /* 계좌번호: 모바일 상세 카드에서만 노출 */
+            html.force-mobile .mobile-only-acct { display: block !important; }
+            /* 3·4) 금액·결제수단·송장칸: 한 줄 + 같은 높이 + 우측 정렬 */
+            html.force-mobile .list-row [data-cell="price"] {
+                grid-area: price; display: flex !important; flex-direction: row !important;
+                align-items: center !important; justify-content: flex-end !important; gap: 8px !important;
+            }
+            html.force-mobile .list-row [data-cell="price"] .price-amount { flex: 0 0 auto !important; white-space: nowrap !important; font-size: 15px !important; }
+            html.force-mobile .list-row [data-cell="price"] .pay-badge { flex: 0 0 auto !important; white-space: nowrap !important; margin-top: 0 !important; }
+            html.force-mobile .list-row [data-cell="tracking"] {
+                grid-area: track; display: flex !important; flex-direction: row !important;
+                align-items: center !important; justify-content: flex-end !important;
+                border-left: none !important; padding-left: 0 !important;
+            }
+            /* '송장 입력' 라벨 숨겨 세 항목 높이 맞춤 (입력칸엔 '입력' placeholder 유지) */
+            html.force-mobile .list-row [data-cell="tracking"] > div:first-child { display: none !important; }
+            html.force-mobile .list-row [data-cell="tracking"] > div:last-child { width: 84px !important; }
             /* ---------- 일괄 처리 바 ---------- */
             html.force-mobile #bulk-action-bar { padding: 12px !important; }
             html.force-mobile #bulk-action-bar button { white-space: nowrap; }
@@ -3285,6 +3296,7 @@
                                 ${item.address || '-'}
                             </div>
                         ` : `<span class="text-[12px] text-slate-300 font-bold">-</span>`}
+                        ${item.account ? `<div class="acct-line mobile-only-acct text-[12px] font-bold text-indigo-600 mt-1 truncate" title="${item.account}">🏦 ${item.account}</div>` : ''}
                     </div>
                     
                     <div data-cell="price" class="w-[72px] shrink-0 flex flex-col justify-center items-start">
