@@ -167,9 +167,11 @@
             box-shadow: 0 2px 12px -6px rgba(99,102,241,0.25);
         }
         .hdr-inner { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 8px; }
-        .hdr-row1 { display: flex; align-items: center; gap: 8px; }
-        .hdr-title { font-size: 16px; font-weight: 900; color: #1e1b4b; letter-spacing: -0.02em; display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
-        .hdr-title .hdr-ver { font-size: 9px; font-weight: 800; color: #ec4899; background: #fce7f3; padding: 2px 6px; border-radius: 999px; }
+        .hdr-row1 { display: flex; align-items: center; gap: 6px; }
+        .hdr-title { font-size: 16px; font-weight: 900; color: #1e1b4b; letter-spacing: -0.02em; display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; overflow: hidden; }
+        .hdr-title .hdr-title-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+        .hdr-title .hdr-ver { font-size: 9px; font-weight: 800; color: #ec4899; background: #fce7f3; padding: 2px 6px; border-radius: 999px; flex: none; }
+        @media (max-width: 400px) { .hdr-title .hdr-ver { display: none; } }
         .hdr-icon-btn {
             width: 40px; height: 40px; flex: none; display: flex; align-items: center; justify-content: center;
             border-radius: 13px; border: 1px solid #E2E8F0; background: #fff; color: #475569; transition: all .15s;
@@ -191,6 +193,8 @@
 
         .hdr-chips { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 2px; }
         .hdr-chip { flex: none; padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 800; border: 1px solid transparent; white-space: nowrap; }
+        .hdr-icon-chip { flex: none; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 13px; font-size: 17px; border: 1px solid transparent; }
+        .hdr-icon-chip:active { transform: scale(0.94); }
         .hdr-chip:active { transform: scale(0.95); }
         .chip-amber { background: #fffbeb; color: #b45309; border-color: #fde68a; }
         .chip-orange { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
@@ -277,7 +281,10 @@
             <button class="hdr-icon-btn hdr-menu" onclick="openFilterDrawer()" aria-label="필터 열기">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="14" y1="12" y2="12"/><line x1="4" x2="18" y1="18" y2="18"/></svg>
             </button>
-            <span class="hdr-title"><span>🗂️ 대시보드</span><span class="hdr-ver">v1.3</span></span>
+            <span class="hdr-title"><span class="hdr-title-text">세린캠</span></span>
+            <button onclick="openSettings()" class="hdr-icon-chip" style="background:#eef2ff; color:#4f46e5; border-color:#e0e7ff;" aria-label="설정" title="설정">⚙️</button>
+            <button onclick="openTrash()" class="hdr-icon-chip" style="background:#fff1f2; color:#e11d48; border-color:#fecdd3;" aria-label="휴지통" title="휴지통">🗑️</button>
+            <button onclick="openReviewManager()" class="hdr-icon-chip" style="background:#fffbeb; color:#b45309; border-color:#fde68a;" aria-label="리뷰 관리" title="리뷰 관리">⭐</button>
             <button class="hdr-icon-btn hdr-refresh" onclick="fetchData()" aria-label="최신 정보 불러오기">
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
             </button>
@@ -296,9 +303,6 @@
 
         <div class="hdr-chips no-scrollbar">
             <button id="view-mode-btn" onclick="toggleViewMode()" class="hdr-chip chip-indigo" style="font-weight:900;">📋 전체내역 보기</button>
-            <button onclick="openSettings()" class="hdr-chip chip-slate">⚙️ 설정</button>
-            <button onclick="openTrash()" class="hdr-chip chip-slate">🗑️ 휴지통</button>
-            <button onclick="openReviewManager()" class="hdr-chip chip-amber">⭐ 리뷰 관리</button>
             <button onclick="openCalendarModal()" class="hdr-chip chip-indigo">📅 달력검색</button>
             <button onclick="resetAllFilters()" class="hdr-chip chip-slate">🔄 필터초기화</button>
         </div>
@@ -464,6 +468,12 @@
 
         <!-- 메인 콘텐츠 -->
         <main id="main-content" class="relative">
+            <!-- 당겨서 새로고침 인디케이터 -->
+            <div id="pull-refresh-bar" class="flex items-center justify-center gap-2 overflow-hidden" style="height:0; transition: height .18s ease;">
+                <svg id="pull-refresh-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-500" style="transition: transform .1s;"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+                <span id="pull-refresh-text" class="text-[12px] font-bold text-indigo-500">당겨서 새로고침</span>
+            </div>
+
             <div id="loading" class="flex flex-col items-center justify-center py-40 h-full bg-white rounded-2xl border border-slate-200 shadow-sm">
                 <div class="w-12 h-12 border-4 border-slate-100 border-t-blue-600 rounded-full animate-spin mb-4"></div>
                 <p class="text-sm font-bold text-slate-500">서버에서 예약 데이터를 불러오는 중입니다...</p>
@@ -1122,6 +1132,84 @@
             renderServiceFilters(); 
             updateSortUI();
             fetchData();
+            initPullToRefresh();
+        }
+
+        // ===== 당겨서 새로고침 (맨 위에서 아래로 스와이프) =====
+        function initPullToRefresh() {
+            const bar = document.getElementById('pull-refresh-bar');
+            const icon = document.getElementById('pull-refresh-icon');
+            const text = document.getElementById('pull-refresh-text');
+            if (!bar) return;
+
+            const THRESHOLD = 64;
+            let startY = 0, pulling = false, dragging = false, refreshing = false;
+
+            function anyOverlayOpen() {
+                const drawer = document.getElementById('filter-drawer');
+                if (drawer && drawer.classList.contains('open')) return true;
+
+                // modal-root / calendar-modal-root: 'active' 클래스로 표시 여부 판단
+                const activeBased = ['modal-root', 'calendar-modal-root'];
+                if (activeBased.some(id => {
+                    const el = document.getElementById(id);
+                    return el && el.classList.contains('active');
+                })) return true;
+
+                // 나머지 오버레이/모달: 'hidden' 클래스가 없으면 열려있는 것
+                const hiddenBased = ['settings-overlay', 'trash-overlay', 'review-manager', 'app-modal', 'add-reservation-modal', 'bulk-tracking-modal', 'bulk-tracking-review-modal', 'today-post-modal', 'review-edit-modal'];
+                return hiddenBased.some(id => {
+                    const el = document.getElementById(id);
+                    return el && !el.classList.contains('hidden');
+                });
+            }
+
+            document.addEventListener('touchstart', (e) => {
+                if (refreshing || anyOverlayOpen()) { pulling = false; return; }
+                if (window.scrollY <= 0) {
+                    startY = e.touches[0].clientY;
+                    pulling = true;
+                    dragging = false;
+                } else {
+                    pulling = false;
+                }
+            }, { passive: true });
+
+            document.addEventListener('touchmove', (e) => {
+                if (!pulling || refreshing) return;
+                const delta = e.touches[0].clientY - startY;
+                if (delta <= 0) { bar.style.height = '0px'; dragging = false; return; }
+                if (window.scrollY > 0) return; // 스크롤이 이미 내려간 상태면 무시
+                dragging = true;
+                const pull = Math.min(delta * 0.5, 90);
+                bar.style.height = pull + 'px';
+                icon.style.transform = `rotate(${pull * 3}deg)`;
+                text.innerText = pull >= THRESHOLD ? '놓으면 새로고침' : '당겨서 새로고침';
+                if (pull > 4) e.preventDefault();
+            }, { passive: false });
+
+            document.addEventListener('touchend', () => {
+                if (!pulling) return;
+                pulling = false;
+                const pull = parseFloat(bar.style.height) || 0;
+                if (dragging && pull >= THRESHOLD) {
+                    refreshing = true;
+                    bar.style.height = '44px';
+                    text.innerText = '새로고침 중...';
+                    icon.style.transform = 'rotate(0deg)';
+                    icon.classList.add('animate-spin');
+                    fetchData().finally(() => {
+                        setTimeout(() => {
+                            bar.style.height = '0px';
+                            icon.classList.remove('animate-spin');
+                            refreshing = false;
+                        }, 300);
+                    });
+                } else {
+                    bar.style.height = '0px';
+                }
+                dragging = false;
+            }, { passive: true });
         }
 
         window.onload = async () => {
@@ -1150,7 +1238,10 @@
             }
         }
 
-        let currentViewMode = 'new'; // 'new' = 신규(예약신청)만, 'all' = 전체내역
+        let currentViewMode = 'new'; // 'new' = 신규(예약신청)만 화면표시, 'all' = 전체내역 화면표시
+        // 참고: 두 모드 모두 데이터는 항상 전체(deleted_at 없는 전체 예약)를 불러옵니다.
+        // 신규/전체는 "무엇을 화면에 보여줄지"만 결정하고, 검색 필터(날짜/모델/수령방법 등)는
+        // 항상 전체내역 기준으로 옵션과 건수를 보여줍니다.
 
         async function fetchData() {
             toggleLoading(true);
@@ -1160,10 +1251,6 @@
                 const PAGE = 1000;
                 while (true) {
                     let q = sb.from('reservations').select('*').is('deleted_at', null).order('id', { ascending: false });
-                    if (currentViewMode === 'new') {
-                        // 신규(예약신청) 상태만: status가 비어있거나 '신청'/'예약신청'인 건
-                        q = q.or('status.is.null,status.eq.,status.eq.신청,status.eq.예약신청');
-                    }
                     const { data, error } = await q.range(from, from + PAGE - 1);
                     if (error) throw new Error(error.message);
                     all = all.concat(data);
@@ -1583,7 +1670,8 @@
         function toggleViewMode() {
             currentViewMode = (currentViewMode === 'new') ? 'all' : 'new';
             currentFilterStatus = 'all';
-            fetchData();
+            updateViewModeUI();
+            filterData(false);
         }
 
         function updateViewModeUI() {
@@ -2441,7 +2529,11 @@
                      if (currentDeliverySubFilter === 'pickedup' && !isAssigned) matchDeliverySub = false;
                 }
 
-                return matchQuery && matchDate && matchReturnDate && matchModel && matchDelivery && matchReturn && matchDeliverySub;
+                // 신규/전체 보기 토글: 카운트/필터 옵션엔 영향 없이 "화면에 보여줄지"만 결정
+                const isNewStatusItem = status === '신청' || status === '' || status === '예약신청';
+                const matchViewMode = currentViewMode === 'all' || isNewStatusItem;
+
+                return matchViewMode && matchQuery && matchDate && matchReturnDate && matchModel && matchDelivery && matchReturn && matchDeliverySub;
             });
 
             updateFilterUI(counts);
