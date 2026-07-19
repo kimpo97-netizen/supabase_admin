@@ -1310,6 +1310,7 @@
         }
 
         let currentViewMode = 'new'; // 'new' = 신규(예약신청)만 화면표시, 'all' = 전체내역 화면표시
+        let viewModeAutoSwitchedBySearch = false; // [NEW] 검색어 때문에 자동으로 'all'로 바뀐 경우만 true (검색어 지우면 원상복구용)
         // 참고: 두 모드 모두 데이터는 항상 전체(deleted_at 없는 전체 예약)를 불러옵니다.
         // 신규/전체는 "무엇을 화면에 보여줄지"만 결정하고, 검색 필터(날짜/모델/수령방법 등)는
         // 항상 전체내역 기준으로 옵션과 건수를 보여줍니다.
@@ -1948,6 +1949,7 @@
         function toggleViewMode() {
             currentViewMode = (currentViewMode === 'new') ? 'all' : 'new';
             currentFilterStatus = 'all';
+            viewModeAutoSwitchedBySearch = false; // [NEW] 수동 전환은 자동복구 대상에서 제외
             updateViewModeUI();
             filterData(false);
         }
@@ -2564,6 +2566,20 @@
 
         function filterData(isSoftRefresh = false) {
             const query = document.getElementById('search-input').value.toLowerCase();
+
+            // [NEW] 검색어를 입력하면 "신규만 보기" 상태여도 자동으로 전체내역 보기로 전환
+            if (query.trim() !== '' && currentViewMode === 'new') {
+                currentViewMode = 'all';
+                currentFilterStatus = 'all';
+                viewModeAutoSwitchedBySearch = true;
+                updateViewModeUI();
+            }
+            // [NEW] 검색어를 전부 지우면, 검색 때문에 자동전환된 경우에 한해 원래 설정(신규만 보기)으로 복구
+            if (query.trim() === '' && viewModeAutoSwitchedBySearch) {
+                currentViewMode = 'new';
+                viewModeAutoSwitchedBySearch = false;
+                updateViewModeUI();
+            }
             
             const counts = { 
                 date: { 'all': 0 },
