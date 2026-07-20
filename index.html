@@ -3269,13 +3269,20 @@
 
             const originalDataBackup = [];
             const updates = []; 
-            
+            const autoTrashRowIds = []; // [NEW] 확정으로 바뀌는 서비스 신청건(연장/백업/변경/취소) row id 모음
+
             selectedRows.forEach(rowId => {
                 const targetIndex = allData.findIndex(item => String(item.row) === String(rowId));
                 if (targetIndex !== -1) {
                     originalDataBackup.push({ index: targetIndex, data: { ...allData[targetIndex] } });
+                    const prevStatus = allData[targetIndex].status;
+                    const category = allData[targetIndex].category;
                     allData[targetIndex].status = newStatus; 
                     updates.push({ row: rowId, status: newStatus, orderTime: allData[targetIndex].orderTime, phone: allData[targetIndex].phone });
+                    // [NEW] 예약신청(원예약)이 아닌 신청건이 '확정'으로 바뀌면 자동 휴지통 이동 대상으로 기록
+                    if (newStatus === '확정' && prevStatus !== '확정' && category && category !== '예약신청') {
+                        autoTrashRowIds.push(String(rowId));
+                    }
                 }
             });
 
@@ -3285,6 +3292,15 @@
 
             try {
                 await sbBatchUpdate(updates);
+                // [NEW] 저장 성공 후에만 신청건을 휴지통으로 이동 (상태는 '확정' 그대로 유지)
+                if (autoTrashRowIds.length > 0) {
+                    const nowIso = new Date().toISOString();
+                    allData = allData.filter(item => !autoTrashRowIds.includes(String(item.row)));
+                    currentlyFilteredList = currentlyFilteredList.filter(item => !autoTrashRowIds.includes(String(item.row)));
+                    filterData(true);
+                    const { error } = await sb.from('reservations').update({ deleted_at: nowIso }).in('id', autoTrashRowIds.map(Number));
+                    if (error) console.error('신청건 일괄 자동 휴지통 이동 실패:', error);
+                }
             } catch (err) {
                 console.error("일괄 저장 실패", err);
                 originalDataBackup.forEach(backup => { Object.assign(allData[backup.index], backup.data); });
@@ -3303,11 +3319,7 @@
                 if (it) items.push(it);
             });
 
-            const deviceItems = items.filter(isRealDeviceItem);     // 기종명 → 취소 보관
-            const otherItems = items.filter(it => !isRealDeviceItem(it)); // 기종 아님 → 결제 여부 확인
-
-            // 실제 처리 실행 함수 (otherAction: 'trash' = 완료보관, 'hard' = 완전삭제)
-            const execute = async (otherAction) => {
+            const execute = async () => {
                 const backup = [...items];
                 allData = allData.filter(item => !rowsToDelete.includes(String(item.row)));
                 currentlyFilteredList = currentlyFilteredList.filter(item => !rowsToDelete.includes(String(item.row)));
@@ -3316,26 +3328,9 @@
 
                 try {
                     const nowIso = new Date().toISOString();
-                    // 1) 기종 건 → 상태 취소 + 휴지통
-                    if (deviceItems.length > 0) {
-                        const { error } = await sb.from('reservations').update({ status: '취소', deleted_at: nowIso }).in('id', deviceItems.map(it => Number(it.row)));
-                        if (error) throw new Error(error.message);
-                    }
-                    // 2) 기종 아님
-                    if (otherItems.length > 0) {
-                        const ids = otherItems.map(it => Number(it.row));
-                        if (otherAction === 'hard') {
-                            const { error } = await sb.from('reservations').delete().in('id', ids);
-                            if (error) throw new Error(error.message);
-                        } else {
-                            const { error } = await sb.from('reservations').update({ status: '완료', deleted_at: nowIso }).in('id', ids);
-                            if (error) throw new Error(error.message);
-                        }
-                    }
-                    const msg = otherAction === 'hard'
-                        ? `${deviceItems.length}건 휴지통 보관, ${otherItems.length}건 완전 삭제 완료.`
-                        : `${items.length}건을 휴지통으로 이동했습니다.`;
-                    showAppAlert(msg, "일괄 처리 완료", "🗑️");
+                    const { error } = await sb.from('reservations').update({ status: '취소', deleted_at: nowIso }).in('id', items.map(it => Number(it.row)));
+                    if (error) throw new Error(error.message);
+                    showAppAlert(`${items.length}건을 휴지통으로 이동했습니다.`, "일괄 처리 완료", "🗑️");
                 } catch (err) {
                     console.error("일괄 삭제 실패", err);
                     allData = [...allData, ...backup];
@@ -3344,20 +3339,8 @@
                 }
             };
 
-            // 기종 아님 건이 없으면 → 기존처럼 단순 확인 후 전부 휴지통(취소)
-            if (otherItems.length === 0) {
-                showAppConfirm(`선택한 ${items.length}개를 휴지통으로 이동하시겠습니까?\n(휴지통에서 복원할 수 있어요)`, () => execute('trash'), "휴지통으로 이동", "이동하기", "bg-[#DC2626]", "🗑️");
-                return;
-            }
-
-            // 기종 아님 건이 있으면 → 결제 여부 확인
-            const note = deviceItems.length > 0 ? `\n(기종 예약 ${deviceItems.length}건은 취소 상태로 휴지통 보관됩니다)` : '';
-            showPaymentConfirm(
-                `기종명이 아닌 신청/서비스 건이 ${otherItems.length}개 있습니다.\n이 건들은 결제가 되었나요?${note}\n\n· 결제됨 → 완료 상태로 휴지통 보관\n· 결제 안 됨 → 완전히 삭제(복구 불가)`,
-                () => execute('trash'),  // 결제됨
-                () => execute('hard'),   // 결제 안 됨
-                "결제 확인", "💳"
-            );
+            // [수정] 결제됨/안됨 분기 제거 — 무조건 휴지통 이동, 상태는 '취소'로 고정
+            showAppConfirm(`선택한 ${items.length}개를 휴지통으로 이동하시겠습니까?\n(휴지통에서 복원할 수 있어요)`, execute, "휴지통으로 이동", "이동하기", "bg-[#DC2626]", "🗑️");
         }
 
         async function copyForPostOffice() {
@@ -4837,6 +4820,28 @@
                 });
             }
 
+            // [NEW] 연장신청 건을 '확정'으로 저장할 때 반영할 원예약(origin_ref 매칭) 미리 찾아두기 — 실제 반영은 메인 저장 성공 후
+            let extendOrigIdx = -1;
+            if (targetIndex !== -1 && originalData && String(originalData.category || '').includes('연장') &&
+                payload.status === '확정' && originalData.status !== '확정' && originalData.origin_ref) {
+                try {
+                    const ref = JSON.parse(originalData.origin_ref);
+                    extendOrigIdx = allData.findIndex(r =>
+                        String(r.orderTime || '') === String(ref.orderTime || '') &&
+                        String(r.name || '') === String(ref.name || '') &&
+                        String(r.phone || '') === String(ref.phone || '') &&
+                        toDash(r.startDate) === toDash(ref.startDate) &&
+                        toDash(r.endDate) === toDash(ref.endDate) &&
+                        String(r.model || '') === String(ref.model || '')
+                    );
+                    if (extendOrigIdx === -1) console.warn('연장신청 확정: origin_ref와 일치하는 원예약을 찾지 못했습니다.', ref);
+                } catch (e) { console.error('origin_ref 파싱 실패:', e); }
+            }
+
+            // [NEW] 대여연장/백업/기종변경/취소 등 "신청건"을 '확정'으로 저장하면, 저장 성공 후 자동으로 휴지통 이동
+            const shouldAutoTrash = targetIndex !== -1 && originalData && originalData.category &&
+                originalData.category !== '예약신청' && payload.status === '확정' && originalData.status !== '확정';
+
             filterData(true); 
             closeModal();
             showAppAlert("수정 내역이 화면에 즉시 반영되었습니다.", "완료", "✅"); 
@@ -4849,7 +4854,26 @@
                 body: JSON.stringify(payload) 
             })
             .then(res => res.json())
-            .then(data => { if(data.result !== 'success') throw new Error("서버 오류"); })
+            .then(data => {
+                if(data.result !== 'success') throw new Error("서버 오류");
+                // [NEW] 메인 저장이 성공한 뒤에만 원예약 반납일을 연장 (실패 시 반납일만 먼저 늘어나는 것 방지)
+                if (extendOrigIdx !== -1) {
+                    const newEndDate = toDash(payload.endDate);
+                    allData[extendOrigIdx].endDate = newEndDate;
+                    filterData(true);
+                    sb.from('reservations').update({ endDate: newEndDate }).eq('id', Number(allData[extendOrigIdx].row))
+                      .then(({ error }) => { if (error) console.error('원예약 반납일 자동연장 실패:', error); });
+                }
+                // [NEW] 메인 저장이 성공한 뒤에만 신청건을 휴지통으로 이동 (상태는 '확정' 그대로 유지)
+                if (shouldAutoTrash) {
+                    const nowIso = new Date().toISOString();
+                    allData = allData.filter(item => String(item.row) !== String(rowId));
+                    currentlyFilteredList = currentlyFilteredList.filter(item => String(item.row) !== String(rowId));
+                    filterData(true);
+                    sb.from('reservations').update({ deleted_at: nowIso }).eq('id', Number(rowId))
+                      .then(({ error }) => { if (error) console.error('신청건 자동 휴지통 이동 실패:', error); });
+                }
+            })
             .catch(err => {
                 if(targetIndex !== -1 && originalData) {
                     Object.assign(allData[targetIndex], originalData); 
@@ -4891,21 +4915,10 @@
             const rowId = document.getElementById('edit-row').value;
             const targetItem = allData.find(item => String(item.row) === String(rowId));
 
-            // 실제 기종(갤럭시/아이폰)이면 → 기존대로 휴지통(상태 취소)
-            if (isRealDeviceItem(targetItem)) {
-                showAppConfirm("휴지통으로 이동하시겠습니까?\n(목록에서 삭제되지만, 휴지통에서 복원할 수 있어요)", () => {
-                    trashMoveSingle(rowId, targetItem, '취소');
-                }, "휴지통으로 이동", "이동하기", "bg-[#DC2626]", "🗑️");
-                return;
-            }
-
-            // 기종명이 아니면 → 결제 여부에 따라 분기
-            showPaymentConfirm(
-                "이 건은 결제가 되었나요?\n\n· 결제됨 → 완료 상태로 휴지통 보관\n· 결제 안 됨 → 완전히 삭제(복구 불가)",
-                () => trashMoveSingle(rowId, targetItem, '완료'),   // 결제됨
-                () => hardDeleteSingle(rowId, targetItem),          // 결제 안 됨
-                "결제 확인", "💳"
-            );
+            // [수정] 결제됨/안됨 분기 제거 — 무조건 휴지통 이동, 상태는 '취소'로 고정
+            showAppConfirm("휴지통으로 이동하시겠습니까?\n(목록에서 삭제되지만, 휴지통에서 복원할 수 있어요)", () => {
+                trashMoveSingle(rowId, targetItem, '취소');
+            }, "휴지통으로 이동", "이동하기", "bg-[#DC2626]", "🗑️");
         }
 
         // 휴지통 이동(상태 지정) - 단건
