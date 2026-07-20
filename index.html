@@ -195,6 +195,26 @@
         .hdr-chip { flex: none; padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 800; border: 1px solid transparent; white-space: nowrap; }
         .hdr-icon-chip { flex: none; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 13px; font-size: 17px; border: 1px solid transparent; }
         .hdr-icon-chip:active { transform: scale(0.94); }
+
+        /* [NEW] 상단 헤더 "더보기" 접이식 메뉴 */
+        .hdr-more-wrap { position: relative; flex: none; }
+        .hdr-more-menu {
+            position: absolute; top: calc(100% + 8px); right: 0; z-index: 70; width: 190px;
+            background: #fff; border: 1px solid #e2e8f0; border-radius: 16px;
+            box-shadow: 0 12px 32px -8px rgba(30,27,75,0.25); padding: 6px; display: flex; flex-direction: column; gap: 2px;
+        }
+        .hdr-more-backdrop { position: fixed; inset: 0; z-index: 65; background: transparent; }
+        /* [FIX] .hidden(단일 클래스)과 명시도가 같아 나중에 정의된 display:flex가 항상 이겨버리던 문제 수정 */
+        .hdr-more-menu.hidden, .hdr-more-backdrop.hidden { display: none !important; }
+        .hdr-more-item {
+            display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border-radius: 11px;
+            font-size: 13px; font-weight: 800; color: #334155; background: transparent; text-align: left; border: none;
+        }
+        .hdr-more-item:active { background: #f1f5f9; }
+        .hdr-more-item .hdr-more-ico {
+            width: 30px; height: 30px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+            font-size: 15px; flex: none;
+        }
         .hdr-chip:active { transform: scale(0.95); }
         .chip-amber { background: #fffbeb; color: #b45309; border-color: #fde68a; }
         .chip-orange { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
@@ -342,11 +362,20 @@
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="14" y1="12" y2="12"/><line x1="4" x2="18" y1="18" y2="18"/></svg>
             </button>
             <span class="hdr-title"><span class="hdr-title-text">세린캠</span></span>
-            <button onclick="openSettings()" class="hdr-icon-chip" style="background:#eef2ff; color:#4f46e5; border-color:#e0e7ff;" aria-label="설정" title="설정">⚙️</button>
-            <button onclick="window.open('https://kimpo97-netizen.github.io/admin/', '_blank')" class="hdr-icon-chip" style="background:#f5f3ff; color:#7c3aed; border-color:#ddd6fe;" aria-label="공연장" title="공연장">🏟️</button>
-            <button onclick="openSales()" class="hdr-icon-chip" style="background:#ecfdf5; color:#059669; border-color:#a7f3d0;" aria-label="매출" title="매출 통계">📊</button>
-            <button onclick="openTrash()" class="hdr-icon-chip" style="background:#fff1f2; color:#e11d48; border-color:#fecdd3;" aria-label="휴지통" title="휴지통">🗑️</button>
-            <button onclick="openReviewManager()" class="hdr-icon-chip" style="background:#fffbeb; color:#b45309; border-color:#fde68a;" aria-label="리뷰 관리" title="리뷰 관리">⭐</button>
+            <div class="hdr-more-wrap">
+                <button class="hdr-icon-btn hdr-menu" onclick="toggleMoreMenu()" aria-label="더보기 메뉴">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+                </button>
+                <div id="hdr-more-backdrop" class="hidden hdr-more-backdrop" onclick="closeMoreMenu()"></div>
+                <div id="hdr-more-menu" class="hidden hdr-more-menu">
+                    <button class="hdr-more-item" onclick="closeMoreMenu(); openSettings();"><span class="hdr-more-ico" style="background:#eef2ff; color:#4f46e5;">⚙️</span> 설정</button>
+                    <button class="hdr-more-item" onclick="closeMoreMenu(); window.open('https://kimpo97-netizen.github.io/admin/', '_blank');"><span class="hdr-more-ico" style="background:#f5f3ff; color:#7c3aed;">🏟️</span> 공연장</button>
+                    <button class="hdr-more-item" onclick="closeMoreMenu(); openSales();"><span class="hdr-more-ico" style="background:#ecfdf5; color:#059669;">📊</span> 매출 통계</button>
+                    <button class="hdr-more-item" onclick="closeMoreMenu(); openTrash();"><span class="hdr-more-ico" style="background:#fff1f2; color:#e11d48;">🗑️</span> 휴지통</button>
+                    <button class="hdr-more-item" onclick="closeMoreMenu(); openAddonArchive();"><span class="hdr-more-ico" style="background:#eff6ff; color:#2563eb;">📥</span> 추가옵션 보관함</button>
+                    <button class="hdr-more-item" onclick="closeMoreMenu(); openReviewManager();"><span class="hdr-more-ico" style="background:#fffbeb; color:#b45309;">⭐</span> 리뷰 관리</button>
+                </div>
+            </div>
             <button class="hdr-icon-btn hdr-refresh" onclick="fetchData()" aria-label="최신 정보 불러오기">
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
             </button>
@@ -1052,13 +1081,19 @@
             document.body.style.overflow = '';
         }
 
+        // [NEW] 보관함 대상(신청건이 '확정'되어 자동 보관된 것)인지 판별 — 휴지통에서는 제외, 추가옵션 보관함에서만 노출
+        function isAddonArchived(item) {
+            return !!(item && item.category && item.category !== '예약신청' && item.status === '확정');
+        }
+
         async function loadTrash() {
             const list = document.getElementById('trash-list');
             list.innerHTML = `<div class="text-center text-slate-400 text-[13px] font-bold py-10">불러오는 중...</div>`;
             try {
                 const { data, error } = await sb.from('reservations').select('*').not('deleted_at', 'is', null).order('deleted_at', { ascending: false });
                 if (error) throw error;
-                trashItems = (data || []).map(mapRecord);
+                // [NEW] 추가옵션 보관함으로 자동 이동된 신청건은 휴지통 목록에서 제외
+                trashItems = (data || []).map(mapRecord).filter(it => !isAddonArchived(it));
                 renderTrashList();
             } catch (e) {
                 list.innerHTML = `<div class="text-center text-rose-500 text-[13px] font-bold py-10 px-4 leading-relaxed">휴지통을 불러오지 못했어요.<br>(reservations 테이블에 deleted_at 컬럼이 있는지 확인해주세요)<br><span class="text-slate-400 font-medium">${e.message || ''}</span></div>`;
@@ -1122,6 +1157,91 @@
                     if (error) throw new Error(error.message);
                     showToast('완전히 삭제했어요');
                     await loadTrash();
+                } catch (e) {
+                    showAppAlert('삭제 실패: ' + (e.message || ''), '🚨 오류', '⚠️');
+                }
+            }, '완전 삭제', '삭제하기', 'bg-[#DC2626]', '🗑️');
+        }
+
+        // ===== [NEW] 추가옵션 보관함 (연장/백업/변경 등 신청건이 '확정'되면 자동 보관) =====
+        let addonArchiveItems = [];
+
+        async function openAddonArchive() {
+            document.getElementById('addon-archive-overlay').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            await loadAddonArchive();
+        }
+        function closeAddonArchive() {
+            document.getElementById('addon-archive-overlay').classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+
+        async function loadAddonArchive() {
+            const list = document.getElementById('addon-archive-list');
+            list.innerHTML = `<div class="text-center text-slate-400 text-[13px] font-bold py-10">불러오는 중...</div>`;
+            try {
+                const { data, error } = await sb.from('reservations').select('*').not('deleted_at', 'is', null).order('deleted_at', { ascending: false });
+                if (error) throw error;
+                addonArchiveItems = (data || []).map(mapRecord).filter(isAddonArchived);
+                renderAddonArchiveList();
+            } catch (e) {
+                list.innerHTML = `<div class="text-center text-rose-500 text-[13px] font-bold py-10 px-4 leading-relaxed">보관함을 불러오지 못했어요.<br><span class="text-slate-400 font-medium">${e.message || ''}</span></div>`;
+            }
+        }
+
+        function renderAddonArchiveList() {
+            const list = document.getElementById('addon-archive-list');
+            const label = document.getElementById('addon-archive-count-label');
+            if (label) label.innerText = addonArchiveItems.length > 0 ? `${addonArchiveItems.length}건 보관 중` : '보관함이 비어 있어요';
+            if (addonArchiveItems.length === 0) {
+                list.innerHTML = `<div class="text-center text-slate-400 text-[13px] font-bold py-16">📥 보관함이 비어 있어요</div>`;
+                return;
+            }
+            list.innerHTML = addonArchiveItems.map(it => {
+                const dt = new Date(it.deleted_at);
+                const dtStr = isNaN(dt.getTime()) ? '' : `${dt.getFullYear()}.${dt.getMonth()+1}.${dt.getDate()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+                const cat = String(it.category || '신청');
+                return `
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3.5 mb-2.5">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-[11px] font-bold text-slate-400">✅ ${dtStr} 확정·보관됨</span>
+                            <span class="text-[11px] font-bold text-slate-300">#${it.row ?? '-'}</span>
+                        </div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-[10px] font-black px-2 py-0.5 rounded-full border bg-indigo-50 text-indigo-600 border-indigo-200 shrink-0">${cat}</span>
+                            <span class="text-[15px] font-black text-slate-900 truncate">${it.name || '이름 없음'}</span>
+                            <span class="text-[12px] font-bold text-slate-400">${it.phone || '-'}</span>
+                        </div>
+                        <div class="text-[12.5px] font-bold text-slate-600 mb-2.5">📝 ${it.scheduleName || it.model || '-'}</div>
+                        <div class="flex gap-2">
+                            <button onclick="restoreAddonArchiveItem(${it.row})" class="flex-1 text-[12.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 py-2 rounded-lg active:bg-emerald-100">↩️ 복원</button>
+                            <button onclick="permanentlyDeleteAddonArchiveItem(${it.row})" class="flex-1 text-[12.5px] font-bold bg-white text-rose-500 border border-rose-200 py-2 rounded-lg active:bg-rose-50">완전 삭제</button>
+                        </div>
+                    </div>`;
+            }).join('');
+        }
+
+        async function restoreAddonArchiveItem(id) {
+            showAppConfirm('이 신청건을 목록으로 복원할까요?', async () => {
+                try {
+                    const { error } = await sb.from('reservations').update({ deleted_at: null }).eq('id', id);
+                    if (error) throw new Error(error.message);
+                    showToast('복원했어요');
+                    await loadAddonArchive();
+                    await fetchData();
+                } catch (e) {
+                    showAppAlert('복원 실패: ' + (e.message || ''), '🚨 오류', '⚠️');
+                }
+            }, '신청건 복원', '복원하기', 'bg-emerald-600', '↩️');
+        }
+
+        async function permanentlyDeleteAddonArchiveItem(id) {
+            showAppConfirm('보관함에서 완전히 삭제할까요?\n(이 작업은 되돌릴 수 없습니다)', async () => {
+                try {
+                    const { error } = await sb.from('reservations').delete().eq('id', id);
+                    if (error) throw new Error(error.message);
+                    showToast('완전히 삭제했어요');
+                    await loadAddonArchive();
                 } catch (e) {
                     showAppAlert('삭제 실패: ' + (e.message || ''), '🚨 오류', '⚠️');
                 }
@@ -1448,6 +1568,22 @@
                 if (btn) { btn.disabled = false; btn.innerHTML = '💾 저장'; }
                 showToast('저장 실패: ' + (e.message || '') + ' (admin_settings 테이블 확인)');
             }
+        }
+
+        // [NEW] 상단 헤더 "더보기" 접이식 메뉴
+        function toggleMoreMenu() {
+            const menu = document.getElementById('hdr-more-menu');
+            const backdrop = document.getElementById('hdr-more-backdrop');
+            if (menu.classList.contains('hidden')) {
+                menu.classList.remove('hidden');
+                backdrop.classList.remove('hidden');
+            } else {
+                closeMoreMenu();
+            }
+        }
+        function closeMoreMenu() {
+            document.getElementById('hdr-more-menu').classList.add('hidden');
+            document.getElementById('hdr-more-backdrop').classList.add('hidden');
         }
 
         async function openSettings() {
@@ -3893,15 +4029,15 @@
                         </div>
                         <div class="flex items-center gap-1 flex-1 min-w-0">
                             <span class="text-[16px] font-black text-slate-900 truncate">${item.name}</span>
-                            ${duplicateBadgeHtml}
                             ${hasMemo ? `<span class="text-[10px] bg-slate-100 text-slate-500 border border-slate-200 px-1.5 py-0.5 rounded font-bold shadow-sm shrink-0" title="${item.memo}">📝</span>` : ''}
                         </div>
                         ${phoneDigits ? `<a onclick="event.stopPropagation()" href="tel:${phoneDigits}" class="text-slate-500 font-bold text-[13px] font-tnum whitespace-nowrap shrink-0 active:text-blue-600">📞 ${item.phone}</a>` : `<span class="text-slate-400 font-bold text-[13px] shrink-0">📞 -</span>`}
                     </div>
 
                     <!-- 부가 배지 (있을 때만) -->
-                    ${(hasBattery || isBackup || isExtension) ? `
+                    ${(hasBattery || isBackup || isExtension || duplicateBadgeHtml) ? `
                     <div class="flex items-center gap-1 flex-wrap w-full">
+                        ${duplicateBadgeHtml}
                         ${hasBattery ? `<span class="text-[10px] font-bold bg-yellow-50 text-yellow-600 border border-yellow-200 px-1.5 py-0.5 rounded shadow-sm">⚡ 배터리</span>` : ''}
                         ${backupBadgeHtml}
                         ${isExtension ? `<span class="text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-200 px-1.5 py-0.5 rounded shadow-sm">⏳ 연장</span>` : ''}
@@ -5761,6 +5897,27 @@
                 </div>
             </div>
             <div id="trash-list" class="flex-1 overflow-y-auto" style="padding: 12px calc(12px) calc(28px + env(safe-area-inset-bottom,0px));"></div>
+        </div>
+    </div>
+
+    <!-- [NEW] 추가옵션 보관함: 연장/백업/변경 등 신청건이 '확정'되면 자동으로 이동해오는 곳 -->
+    <div id="addon-archive-overlay" class="hidden fixed inset-0 z-[120] bg-slate-50">
+        <div class="h-full flex flex-col">
+            <div class="bg-white border-b border-slate-200 shadow-sm shrink-0" style="padding-top: env(safe-area-inset-top,0px);">
+                <div class="flex items-center gap-2 px-3 py-3">
+                    <button onclick="closeAddonArchive()" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 text-slate-600 shrink-0" aria-label="닫기">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    </button>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-[16px] font-black text-slate-900 leading-tight">📥 추가옵션 보관함</div>
+                        <div id="addon-archive-count-label" class="text-[11px] font-bold text-slate-400 leading-tight">확정 처리된 연장·백업·변경 신청건이 보관돼요</div>
+                    </div>
+                    <button onclick="loadAddonArchive()" class="w-9 h-9 flex items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 shrink-0" aria-label="새로고침">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div id="addon-archive-list" class="flex-1 overflow-y-auto" style="padding: 12px calc(12px) calc(28px + env(safe-area-inset-bottom,0px));"></div>
         </div>
     </div>
 
