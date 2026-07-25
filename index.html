@@ -1115,6 +1115,7 @@
         async function loadTrash() {
             const list = document.getElementById('trash-list');
             list.innerHTML = `<div class="text-center text-slate-400 text-[13px] font-bold py-10">불러오는 중...</div>`;
+            selectedTrashIds.clear();
             try {
                 const { data, error } = await sb.from('reservations').select('*').not('deleted_at', 'is', null).order('deleted_at', { ascending: false });
                 if (error) throw error;
@@ -1125,12 +1126,14 @@
             }
         }
 
+        let selectedTrashIds = new Set();
         function renderTrashList() {
             const list = document.getElementById('trash-list');
             const label = document.getElementById('trash-count-label');
             if (label) label.innerText = trashItems.length > 0 ? `${trashItems.length}건 보관 중` : '휴지통이 비어 있어요';
             if (trashItems.length === 0) {
                 list.innerHTML = `<div class="text-center text-slate-400 text-[13px] font-bold py-16">🗑️ 휴지통이 비어 있어요</div>`;
+                updateTrashSelectionUI();
                 return;
             }
             list.innerHTML = trashItems.map(it => {
@@ -1141,10 +1144,14 @@
                 if (st === '완료') stCls = 'bg-blue-50 text-blue-600 border-blue-200';
                 else if (st.includes('취소')) stCls = 'bg-rose-50 text-rose-600 border-rose-200';
                 const stBadge = st ? `<span class="text-[10px] font-black px-2 py-0.5 rounded-full border ${stCls} shrink-0">${st}</span>` : '';
+                const checked = selectedTrashIds.has(it.row) ? 'checked' : '';
                 return `
                     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3.5 mb-2.5">
                         <div class="flex items-center justify-between mb-2">
-                            <span class="text-[11px] font-bold text-slate-400">🗑️ ${dtStr} 삭제됨</span>
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" ${checked} onchange="toggleTrashSelect(${it.row}, this.checked)" class="w-4 h-4 rounded border-slate-300 text-rose-600 shrink-0">
+                                <span class="text-[11px] font-bold text-slate-400">🗑️ ${dtStr} 삭제됨</span>
+                            </label>
                             <span class="text-[11px] font-bold text-slate-300">#${it.row ?? '-'}</span>
                         </div>
                         <div class="flex items-center gap-2 mb-1">
@@ -1159,6 +1166,48 @@
                         </div>
                     </div>`;
             }).join('');
+            updateTrashSelectionUI();
+        }
+        function toggleTrashSelect(id, checked) {
+            if (checked) selectedTrashIds.add(id);
+            else selectedTrashIds.delete(id);
+            updateTrashSelectionUI();
+        }
+        function toggleTrashSelectAll() {
+            if (selectedTrashIds.size === trashItems.length) {
+                selectedTrashIds.clear();
+            } else {
+                trashItems.forEach(it => selectedTrashIds.add(it.row));
+            }
+            renderTrashList();
+        }
+        function updateTrashSelectionUI() {
+            const n = selectedTrashIds.size;
+            const btn = document.getElementById('trash-delete-selected-btn');
+            if (btn) {
+                btn.disabled = n === 0;
+                btn.innerText = n > 0 ? `선택 삭제 (${n})` : '선택 삭제';
+            }
+            const allBtn = document.getElementById('trash-select-all-btn');
+            if (allBtn) allBtn.innerText = (n > 0 && n === trashItems.length) ? '전체해제' : '전체선택';
+        }
+        async function permanentlyDeleteSelectedTrash() {
+            if (selectedTrashIds.size === 0) {
+                showToast('선택된 항목이 없어요');
+                return;
+            }
+            const ids = Array.from(selectedTrashIds);
+            showAppConfirm(`선택한 ${ids.length}건을 완전히 삭제할까요?\n(이 작업은 되돌릴 수 없습니다)`, async () => {
+                try {
+                    const { error } = await sb.from('reservations').delete().in('id', ids);
+                    if (error) throw new Error(error.message);
+                    showToast(`${ids.length}건 완전히 삭제했어요`);
+                    selectedTrashIds.clear();
+                    await loadTrash();
+                } catch (e) {
+                    showAppAlert('삭제 실패: ' + (e.message || ''), '🚨 오류', '⚠️');
+                }
+            }, '선택 삭제', '삭제하기', 'bg-[#DC2626]', '🗑️');
         }
 
         async function restoreTrashItem(id) {
@@ -1186,6 +1235,25 @@
                     showAppAlert('삭제 실패: ' + (e.message || ''), '🚨 오류', '⚠️');
                 }
             }, '완전 삭제', '삭제하기', 'bg-[#DC2626]', '🗑️');
+        }
+
+        // [NEW] 휴지통에 있는 모든 항목을 한 번에 완전 삭제
+        async function permanentlyDeleteAllTrash() {
+            if (!trashItems || trashItems.length === 0) {
+                showToast('휴지통이 비어있어요');
+                return;
+            }
+            const ids = trashItems.map(it => it.row).filter(id => id !== undefined && id !== null);
+            showAppConfirm(`휴지통에 있는 ${ids.length}건을 전부 완전히 삭제할까요?\n(이 작업은 되돌릴 수 없습니다)`, async () => {
+                try {
+                    const { error } = await sb.from('reservations').delete().in('id', ids);
+                    if (error) throw new Error(error.message);
+                    showToast(`${ids.length}건 완전히 삭제했어요`);
+                    await loadTrash();
+                } catch (e) {
+                    showAppAlert('삭제 실패: ' + (e.message || ''), '🚨 오류', '⚠️');
+                }
+            }, '전체 완전 삭제', '전부 삭제하기', 'bg-[#DC2626]', '🗑️');
         }
 
 
@@ -5916,6 +5984,13 @@
                     <button onclick="loadTrash()" class="w-9 h-9 flex items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 shrink-0" aria-label="새로고침">
                         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
                     </button>
+                    <button onclick="permanentlyDeleteAllTrash()" class="w-9 h-9 flex items-center justify-center rounded-xl bg-rose-50 text-rose-600 shrink-0" aria-label="모두 완전삭제">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>
+                </div>
+                <div class="flex items-center gap-2 px-3 pb-3">
+                    <button id="trash-select-all-btn" onclick="toggleTrashSelectAll()" class="h-8 px-3 flex items-center rounded-lg bg-slate-100 text-slate-600 font-bold text-[12px] shrink-0">전체선택</button>
+                    <button id="trash-delete-selected-btn" onclick="permanentlyDeleteSelectedTrash()" disabled class="h-8 px-3 flex items-center rounded-lg bg-rose-100 text-rose-700 font-bold text-[12px] shrink-0 disabled:opacity-40 disabled:cursor-not-allowed">선택 삭제</button>
                 </div>
             </div>
             <div id="trash-list" class="flex-1 overflow-y-auto" style="padding: 12px calc(12px) calc(28px + env(safe-area-inset-bottom,0px));"></div>
