@@ -223,6 +223,16 @@
         .chip-rose { background: #fff1f2; color: #e11d48; border-color: #fecdd3; }
         .chip-active-indigo { background: #4f46e5 !important; color: #fff !important; border-color: #4f46e5 !important; }
 
+        /* [NEW] 검색창 밑 신규예약/부가서비스 간략 칩 (공간이 좁아 "신규5" 식으로 압축 표시) */
+        .svc-mini { flex: none; padding: 6px 10px; border-radius: 999px; font-size: 11px; font-weight: 800; border: 1px solid transparent; white-space: nowrap; }
+        .svc-mini:active { transform: scale(0.95); }
+        .svc-mini[data-svc="newReservation"] { background: #ecfdf5; color: #047857; border-color: #a7f3d0; }
+        .svc-mini[data-svc="cancel"] { background: #fff1f2; color: #e11d48; border-color: #fecdd3; }
+        .svc-mini[data-svc="extension"] { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
+        .svc-mini[data-svc="change"] { background: #fdf2f8; color: #be185d; border-color: #fbcfe8; }
+        .svc-mini[data-svc="backup"] { background: #faf5ff; color: #7e22ce; border-color: #e9d5ff; }
+        .svc-mini.active { box-shadow: inset 0 0 0 2px currentColor; }
+
         /* ===================== 필터 드로어 ===================== */
         #filter-overlay {
             position: fixed; inset: 0; z-index: 80; background: rgba(15,23,42,0.5); backdrop-filter: blur(2px);
@@ -372,8 +382,7 @@
                     <button class="hdr-more-item" onclick="closeMoreMenu(); window.open('https://kimpo97-netizen.github.io/admin/', '_blank');"><span class="hdr-more-ico" style="background:#f5f3ff; color:#7c3aed;">🏟️</span> 공연장</button>
                     <button class="hdr-more-item" onclick="closeMoreMenu(); openSales();"><span class="hdr-more-ico" style="background:#ecfdf5; color:#059669;">📊</span> 매출 통계</button>
                     <button class="hdr-more-item" onclick="closeMoreMenu(); openTrash();"><span class="hdr-more-ico" style="background:#fff1f2; color:#e11d48;">🗑️</span> 휴지통</button>
-                    <button class="hdr-more-item" onclick="closeMoreMenu(); openAddonArchive();"><span class="hdr-more-ico" style="background:#eff6ff; color:#2563eb;">📥</span> 추가옵션 보관함</button>
-                    <button class="hdr-more-item" onclick="closeMoreMenu(); openReviewManager();"><span class="hdr-more-ico" style="background:#fffbeb; color:#b45309;">⭐</span> 리뷰 관리</button>
+                        <button class="hdr-more-item" onclick="closeMoreMenu(); openReviewManager();"><span class="hdr-more-ico" style="background:#fffbeb; color:#b45309;">⭐</span> 리뷰 관리</button>
                 </div>
             </div>
             <button class="hdr-icon-btn hdr-refresh" onclick="fetchData()" aria-label="최신 정보 불러오기">
@@ -391,6 +400,8 @@
             </div>
             <button class="hdr-sort" onclick="toggleSortMode()">정렬<span id="sort-mode-text">최신순</span></button>
         </div>
+
+        <div id="svc-mini-container" class="hdr-chips no-scrollbar"></div>
 
         <div class="hdr-chips no-scrollbar">
             <button id="view-mode-btn" onclick="toggleViewMode()" class="hdr-chip chip-indigo" style="font-weight:900;">📋 전체내역 보기</button>
@@ -425,6 +436,26 @@
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
                     수령일 달력 검색
                 </button>
+            </div>
+
+            <!-- 신규 예약 필터 -->
+            <div class="bg-emerald-50 p-4 rounded-2xl shadow-sm border border-emerald-200">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="flex flex-col gap-1.5">
+                        <h3 class="text-[15px] font-black text-emerald-900 flex items-center gap-1.5">
+                            <span class="text-base">🔔</span> 신규 예약
+                        </h3>
+                    </div>
+                </div>
+                <div id="block-svc-newReservation" style="display:none;">
+                    <button onclick="setServiceFilter('newReservation')" class="w-full bg-white hover:bg-emerald-50 border border-emerald-100 p-2.5 rounded-xl flex justify-between items-center transition-colors svc-header" data-svc="newReservation">
+                        <span class="font-bold text-[13px] text-slate-700 svc-title">📝 신청·대기중</span>
+                        <span class="text-xs font-bold text-slate-500 svc-count" id="count-svc-newReservation">0건</span>
+                    </button>
+                </div>
+                <div id="new-reservation-empty-msg" class="text-center py-4 bg-white/50 rounded-xl border border-emerald-100/50 hidden mt-0">
+                    <span class="text-[11px] font-bold text-emerald-600">신청·대기중인 예약이 없어요! 🎉</span>
+                </div>
             </div>
 
             <!-- 추가 서비스 현황 세로형 필터 -->
@@ -1009,7 +1040,7 @@
                     name: 'name', phone: 'phone', orderTime: 'orderTime',
                     zipCode: 'zipcode', address: 'address', startDate: 'startDate',
                     delivery: 'delivery', returnWay: 'returnMethod',
-                    review: 'review', scheduleName: 'scheduleName'
+                    review: 'review', scheduleName: 'scheduleName', account: 'account'
                 };
                 for (const k in map) {
                     if (k in payload) {
@@ -1081,19 +1112,13 @@
             document.body.style.overflow = '';
         }
 
-        // [NEW] 보관함 대상(신청건이 '확정'되어 자동 보관된 것)인지 판별 — 휴지통에서는 제외, 추가옵션 보관함에서만 노출
-        function isAddonArchived(item) {
-            return !!(item && item.category && item.category !== '예약신청' && item.status === '확정');
-        }
-
         async function loadTrash() {
             const list = document.getElementById('trash-list');
             list.innerHTML = `<div class="text-center text-slate-400 text-[13px] font-bold py-10">불러오는 중...</div>`;
             try {
                 const { data, error } = await sb.from('reservations').select('*').not('deleted_at', 'is', null).order('deleted_at', { ascending: false });
                 if (error) throw error;
-                // [NEW] 추가옵션 보관함으로 자동 이동된 신청건은 휴지통 목록에서 제외
-                trashItems = (data || []).map(mapRecord).filter(it => !isAddonArchived(it));
+                trashItems = (data || []).map(mapRecord);
                 renderTrashList();
             } catch (e) {
                 list.innerHTML = `<div class="text-center text-rose-500 text-[13px] font-bold py-10 px-4 leading-relaxed">휴지통을 불러오지 못했어요.<br>(reservations 테이블에 deleted_at 컬럼이 있는지 확인해주세요)<br><span class="text-slate-400 font-medium">${e.message || ''}</span></div>`;
@@ -1163,90 +1188,6 @@
             }, '완전 삭제', '삭제하기', 'bg-[#DC2626]', '🗑️');
         }
 
-        // ===== [NEW] 추가옵션 보관함 (연장/백업/변경 등 신청건이 '확정'되면 자동 보관) =====
-        let addonArchiveItems = [];
-
-        async function openAddonArchive() {
-            document.getElementById('addon-archive-overlay').classList.remove('hidden');
-            document.body.style.overflow = 'hidden';
-            await loadAddonArchive();
-        }
-        function closeAddonArchive() {
-            document.getElementById('addon-archive-overlay').classList.add('hidden');
-            document.body.style.overflow = '';
-        }
-
-        async function loadAddonArchive() {
-            const list = document.getElementById('addon-archive-list');
-            list.innerHTML = `<div class="text-center text-slate-400 text-[13px] font-bold py-10">불러오는 중...</div>`;
-            try {
-                const { data, error } = await sb.from('reservations').select('*').not('deleted_at', 'is', null).order('deleted_at', { ascending: false });
-                if (error) throw error;
-                addonArchiveItems = (data || []).map(mapRecord).filter(isAddonArchived);
-                renderAddonArchiveList();
-            } catch (e) {
-                list.innerHTML = `<div class="text-center text-rose-500 text-[13px] font-bold py-10 px-4 leading-relaxed">보관함을 불러오지 못했어요.<br><span class="text-slate-400 font-medium">${e.message || ''}</span></div>`;
-            }
-        }
-
-        function renderAddonArchiveList() {
-            const list = document.getElementById('addon-archive-list');
-            const label = document.getElementById('addon-archive-count-label');
-            if (label) label.innerText = addonArchiveItems.length > 0 ? `${addonArchiveItems.length}건 보관 중` : '보관함이 비어 있어요';
-            if (addonArchiveItems.length === 0) {
-                list.innerHTML = `<div class="text-center text-slate-400 text-[13px] font-bold py-16">📥 보관함이 비어 있어요</div>`;
-                return;
-            }
-            list.innerHTML = addonArchiveItems.map(it => {
-                const dt = new Date(it.deleted_at);
-                const dtStr = isNaN(dt.getTime()) ? '' : `${dt.getFullYear()}.${dt.getMonth()+1}.${dt.getDate()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
-                const cat = String(it.category || '신청');
-                return `
-                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3.5 mb-2.5">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="text-[11px] font-bold text-slate-400">✅ ${dtStr} 확정·보관됨</span>
-                            <span class="text-[11px] font-bold text-slate-300">#${it.row ?? '-'}</span>
-                        </div>
-                        <div class="flex items-center gap-2 mb-1">
-                            <span class="text-[10px] font-black px-2 py-0.5 rounded-full border bg-indigo-50 text-indigo-600 border-indigo-200 shrink-0">${cat}</span>
-                            <span class="text-[15px] font-black text-slate-900 truncate">${it.name || '이름 없음'}</span>
-                            <span class="text-[12px] font-bold text-slate-400">${it.phone || '-'}</span>
-                        </div>
-                        <div class="text-[12.5px] font-bold text-slate-600 mb-2.5">📝 ${it.scheduleName || it.model || '-'}</div>
-                        <div class="flex gap-2">
-                            <button onclick="restoreAddonArchiveItem(${it.row})" class="flex-1 text-[12.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 py-2 rounded-lg active:bg-emerald-100">↩️ 복원</button>
-                            <button onclick="permanentlyDeleteAddonArchiveItem(${it.row})" class="flex-1 text-[12.5px] font-bold bg-white text-rose-500 border border-rose-200 py-2 rounded-lg active:bg-rose-50">완전 삭제</button>
-                        </div>
-                    </div>`;
-            }).join('');
-        }
-
-        async function restoreAddonArchiveItem(id) {
-            showAppConfirm('이 신청건을 목록으로 복원할까요?', async () => {
-                try {
-                    const { error } = await sb.from('reservations').update({ deleted_at: null }).eq('id', id);
-                    if (error) throw new Error(error.message);
-                    showToast('복원했어요');
-                    await loadAddonArchive();
-                    await fetchData();
-                } catch (e) {
-                    showAppAlert('복원 실패: ' + (e.message || ''), '🚨 오류', '⚠️');
-                }
-            }, '신청건 복원', '복원하기', 'bg-emerald-600', '↩️');
-        }
-
-        async function permanentlyDeleteAddonArchiveItem(id) {
-            showAppConfirm('보관함에서 완전히 삭제할까요?\n(이 작업은 되돌릴 수 없습니다)', async () => {
-                try {
-                    const { error } = await sb.from('reservations').delete().eq('id', id);
-                    if (error) throw new Error(error.message);
-                    showToast('완전히 삭제했어요');
-                    await loadAddonArchive();
-                } catch (e) {
-                    showAppAlert('삭제 실패: ' + (e.message || ''), '🚨 오류', '⚠️');
-                }
-            }, '완전 삭제', '삭제하기', 'bg-[#DC2626]', '🗑️');
-        }
 
         const MODEL_LIST = ['23U', '24U', '25U', '26U', '17P', '17PM'];
         const STATUS_PRIORITY = { '예약신청': 1, '대기': 2, '확정': 3, '반납완료': 4, '취소': 5 };
@@ -2062,12 +2003,36 @@
             }).join('');
         }
 
+        // [NEW] origin_ref로 원예약을 찾는 공용 헬퍼 (신청건의 계좌번호가 비어있을 때 원예약 걸로 대체하거나, 차액 계산 등에 재사용)
+        function findOriginByRef(item) {
+            if (!item || !item.origin_ref) return null;
+            try {
+                const ref = JSON.parse(item.origin_ref);
+                return allData.find(r =>
+                    String(r.orderTime || '') === String(ref.orderTime || '') &&
+                    String(r.name || '') === String(ref.name || '') &&
+                    String(r.phone || '') === String(ref.phone || '') &&
+                    toDash(r.startDate) === toDash(ref.startDate) &&
+                    toDash(r.endDate) === toDash(ref.endDate) &&
+                    String(r.model || '') === String(ref.model || '')
+                ) || null;
+            } catch (e) { console.error('origin_ref 파싱 실패:', e); return null; }
+        }
+
         function copyRefundInfo(rowId) {
             const item = allData.find(it => String(it.row) === String(rowId));
             if (!item) { showToast('예약 정보를 찾을 수 없습니다.'); return; }
-            const account = String(item.account || '').trim();
-            const price = String(item.totalPrice || '0');
+            // [NEW] 신청건 자체엔 계좌번호가 비어있을 수 있어 원예약 걸로 대체
+            const account = String(item.account || (findOriginByRef(item) || {}).account || '').trim();
             if (!account) { showToast('⚠️ 등록된 계좌번호가 없습니다. 상세에서 먼저 입력해 주세요.'); return; }
+            let price = Number(item.totalPrice) || 0;
+            // [NEW] 기종변경 신청건은 변경 후 총액이 아니라 원예약과의 차액(환불/추가 금액)을 복사
+            if (String(item.category || '').includes('변경')) {
+                const orig = findOriginByRef(item);
+                if (orig) {
+                    price = Math.abs((Number(item.totalPrice) || 0) - (Number(orig.totalPrice) || 0));
+                }
+            }
             const text = `${account} ${price}원`;
             const doCopy = (t) => {
                 if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -2134,7 +2099,7 @@
             resetActive('.delivery-sub-filter-item');
             resetActive('.return-filter-item');
 
-            document.querySelectorAll('.upc-header, .upc-item, .ret-upc-header, .ret-upc-item, .svc-header').forEach(btn => {
+            document.querySelectorAll('.upc-header, .upc-item, .ret-upc-header, .ret-upc-item, .svc-header, .svc-mini').forEach(btn => {
                 btn.classList.remove('active');
             });
 
@@ -2234,10 +2199,22 @@
                         <span class="text-xs font-bold text-slate-500 svc-count" id="count-svc-backup">0건</span>
                     </button>
                 </div>
-                <div id="block-svc-extension" style="display:none;">
+                <div id="block-svc-extension" style="display:none;" class="mb-2">
                     <button onclick="setServiceFilter('extension')" class="w-full bg-white hover:bg-yellow-50 border border-yellow-100 p-2.5 rounded-xl flex justify-between items-center transition-colors svc-header" data-svc="extension">
                         <span class="font-bold text-[13px] text-slate-700 svc-title">⏳ 대여 연장</span>
                         <span class="text-xs font-bold text-slate-500 svc-count" id="count-svc-extension">0건</span>
+                    </button>
+                </div>
+                <div id="block-svc-change" style="display:none;" class="mb-2">
+                    <button onclick="setServiceFilter('change')" class="w-full bg-white hover:bg-yellow-50 border border-yellow-100 p-2.5 rounded-xl flex justify-between items-center transition-colors svc-header" data-svc="change">
+                        <span class="font-bold text-[13px] text-slate-700 svc-title">🔄 기종 변경</span>
+                        <span class="text-xs font-bold text-slate-500 svc-count" id="count-svc-change">0건</span>
+                    </button>
+                </div>
+                <div id="block-svc-cancel" style="display:none;">
+                    <button onclick="setServiceFilter('cancel')" class="w-full bg-white hover:bg-yellow-50 border border-yellow-100 p-2.5 rounded-xl flex justify-between items-center transition-colors svc-header" data-svc="cancel">
+                        <span class="font-bold text-[13px] text-slate-700 svc-title">🚫 취소·환불</span>
+                        <span class="text-xs font-bold text-slate-500 svc-count" id="count-svc-cancel">0건</span>
                     </button>
                 </div>
             `;
@@ -2285,7 +2262,7 @@
                 }
             }
             
-            document.querySelectorAll('.ret-upc-header, .ret-upc-item, .svc-header').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.ret-upc-header, .ret-upc-item, .svc-header, .svc-mini').forEach(btn => btn.classList.remove('active'));
 
             filterData(false);
         }
@@ -2332,7 +2309,7 @@
                 }
             }
             
-            document.querySelectorAll('.upc-header, .upc-item, .svc-header').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.upc-header, .upc-item, .svc-header, .svc-mini').forEach(btn => btn.classList.remove('active'));
 
             filterData(false);
         }
@@ -2393,7 +2370,7 @@
                 }
             });
 
-            document.querySelectorAll('.ret-upc-header, .ret-upc-item, .svc-header').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.ret-upc-header, .ret-upc-item, .svc-header, .svc-mini').forEach(btn => btn.classList.remove('active'));
 
             filterData(false);
         }
@@ -2454,7 +2431,7 @@
                 }
             });
             
-            document.querySelectorAll('.upc-header, .upc-item, .svc-header').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.upc-header, .upc-item, .svc-header, .svc-mini').forEach(btn => btn.classList.remove('active'));
 
             filterData(false);
         }
@@ -2501,7 +2478,7 @@
                 viewAllRetBtn.classList.add('bg-white', 'text-rose-600', 'border-rose-200', 'hover:bg-rose-100');
             }
 
-            document.querySelectorAll('.svc-header').forEach(btn => {
+            document.querySelectorAll('.svc-header, .svc-mini').forEach(btn => {
                 if (currentServiceFilter === btn.dataset.svc) btn.classList.add('active');
                 else btn.classList.remove('active');
             });
@@ -2737,7 +2714,7 @@
                     '택배': { 'all': 0, battery: 0, dates: {} },
                     '공연장': { 'all': 0, battery: 0, dates: {} }
                 },
-                service: { backup: 0, extension: 0 } 
+                service: { backup: 0, extension: 0, change: 0, cancel: 0, newReservation: 0 } 
             };
 
             ['퀵', '사무실', '택배', '공연장'].forEach(del => {
@@ -2768,20 +2745,40 @@
                 const cleanModel = model.replace(/\s*\+?\s*보조배터리/g, '').trim();
                 const isAssigned = /\d$/.test(cleanModel);
 
-                const isBackup = String(item.category).includes('백업') || model.includes('백업') || String(item.dataBackup).includes('신청') || String(item.memo).includes('백업');
+                const isBackup = String(item.category).includes('백업') || model.includes('백업') || String(item.memo).includes('백업');
                 const isExtension = String(item.category).includes('연장') || model.includes('연장') || String(item.memo).includes('연장');
+                const isChange = String(item.category).includes('변경') || model.includes('변경') || String(item.memo).includes('변경');
+                const isCancel = String(item.category).includes('취소') || model.includes('취소') || String(item.memo).includes('취소') || status.includes('취소');
                 const hasBattery = model.includes('보조배터리'); 
+                // [NEW] 연장/백업/변경/취소 신청건(별도 행) — 부가서비스 필터에는 이 추가옵션 내역만 세고 보여줌
+                const isRequestRow = ['연장신청', '백업신청', '변경신청', '취소신청'].includes(String(item.category));
+                // [NEW] 신규 예약: 신청건이 아닌 원예약 중 상태가 '예약신청' 또는 '대기'인 것
+                const isNewReservation = !isRequestRow && (status === '예약신청' || status === '대기');
 
                 const matchQuery = query === '' || Object.values(item).some(val => String(val).toLowerCase().includes(query));
                 
-                if (matchQuery && !status.includes('취소')) {
-                    if (isBackup) counts.service.backup++;
-                    if (isExtension) counts.service.extension++;
+                if (matchQuery) {
+                    if (isRequestRow) {
+                        if (!status.includes('취소')) {
+                            if (isBackup) counts.service.backup++;
+                            if (isExtension) counts.service.extension++;
+                            if (isChange) counts.service.change++;
+                        }
+                        if (isCancel) counts.service.cancel++;
+                    }
+                    if (isNewReservation) counts.service.newReservation++;
                 }
 
                 if (currentServiceFilter !== null) {
+                    if (currentServiceFilter === 'newReservation') {
+                        return isNewReservation && matchQuery;
+                    }
+                    // [NEW] 추가옵션 내역(연장/백업/변경/취소 신청건)만 표시, 원예약 제외
+                    if (!isRequestRow) return false;
                     if (currentServiceFilter === 'backup' && !isBackup) return false;
                     if (currentServiceFilter === 'extension' && !isExtension) return false;
+                    if (currentServiceFilter === 'change' && !isChange) return false;
+                    if (currentServiceFilter === 'cancel' && !isCancel) return false;
                     return matchQuery; 
                 }
 
@@ -3010,7 +3007,7 @@
             updateTabCounts('filter-group-return', counts.return);
 
             let totalService = 0;
-            ['backup', 'extension'].forEach(svc => {
+            ['backup', 'extension', 'change', 'cancel'].forEach(svc => {
                 const count = counts.service[svc];
                 totalService += count;
                 const block = document.getElementById(`block-svc-${svc}`);
@@ -3022,6 +3019,31 @@
             const svcEmptyMsg = document.getElementById('service-empty-msg');
             if (svcEmptyMsg) {
                 svcEmptyMsg.style.display = totalService === 0 ? 'block' : 'none';
+            }
+
+            {
+                const count = counts.service.newReservation;
+                const block = document.getElementById('block-svc-newReservation');
+                if (block) block.style.display = count > 0 ? 'block' : 'none';
+                const elCount = document.getElementById('count-svc-newReservation');
+                if (elCount) elCount.innerText = `${count}건`;
+                const emptyMsg = document.getElementById('new-reservation-empty-msg');
+                if (emptyMsg) emptyMsg.style.display = count === 0 ? 'block' : 'none';
+            }
+
+            // [NEW] 검색창 밑 간략 칩 (신규5, 취소1, 연장1, 변경0은 숨김, 백업1 …) — 공간이 좁아 압축 표기
+            {
+                const miniContainer = document.getElementById('svc-mini-container');
+                if (miniContainer) {
+                    const MINI_LABELS = { newReservation: '신규', backup: '백업', extension: '연장', change: '변경', cancel: '취소' };
+                    const miniHtml = ['newReservation', 'backup', 'extension', 'change', 'cancel'].map(svc => {
+                        const c = counts.service[svc];
+                        if (!c) return '';
+                        const activeCls = currentServiceFilter === svc ? ' active' : '';
+                        return `<button onclick="setServiceFilter('${svc}')" class="svc-mini${activeCls}" data-svc="${svc}">${MINI_LABELS[svc]}${c}</button>`;
+                    }).join('');
+                    miniContainer.innerHTML = miniHtml;
+                }
             }
 
             let totalUpcoming = 0;
@@ -3312,7 +3334,7 @@
                     selectedRows.forEach(rowId => {
                         const item = allData.find(i => String(i.row) === String(rowId));
                         if (item) {
-                            const isBackup = String(item.category).includes('백업') || String(item.model).includes('백업') || String(item.dataBackup).includes('신청') || String(item.memo).includes('백업');
+                            const isBackup = String(item.category).includes('백업') || String(item.model).includes('백업') || String(item.memo).includes('백업');
                             if (isBackup) hasBackup = true;
 
                             if (item.model) {
@@ -3967,7 +3989,7 @@
                 const cleanModelForBorder = String(item.model || '').toUpperCase().replace(/\s*\+?\s*보조배터리/g, '').trim();
                 const isAssigned = /\d$/.test(cleanModelForBorder);
 
-                const isBackup = String(item.category).includes('백업') || String(item.model).includes('백업') || String(item.dataBackup).includes('신청') || String(item.memo).includes('백업');
+                const isBackup = String(item.category).includes('백업') || String(item.model).includes('백업') || String(item.memo).includes('백업');
                 const isExtension = String(item.category).includes('연장') || String(item.model).includes('연장') || String(item.memo).includes('연장');
                 
                 let backupBadgeHtml = '';
@@ -4838,7 +4860,7 @@
             document.getElementById('edit-tracking').value = item.trackingNumber || '';
             document.getElementById('edit-memo').value = item.memo || '';
             document.getElementById('edit-price').value = (item.totalPrice || 0);
-            document.getElementById('edit-account').value = item.account || '';
+            document.getElementById('edit-account').value = item.account || (findOriginByRef(item) || {}).account || '';
 
             const deliveryVal = String(item.delivery || '');
             let selectedDelivery = '';
@@ -5897,27 +5919,6 @@
                 </div>
             </div>
             <div id="trash-list" class="flex-1 overflow-y-auto" style="padding: 12px calc(12px) calc(28px + env(safe-area-inset-bottom,0px));"></div>
-        </div>
-    </div>
-
-    <!-- [NEW] 추가옵션 보관함: 연장/백업/변경 등 신청건이 '확정'되면 자동으로 이동해오는 곳 -->
-    <div id="addon-archive-overlay" class="hidden fixed inset-0 z-[120] bg-slate-50">
-        <div class="h-full flex flex-col">
-            <div class="bg-white border-b border-slate-200 shadow-sm shrink-0" style="padding-top: env(safe-area-inset-top,0px);">
-                <div class="flex items-center gap-2 px-3 py-3">
-                    <button onclick="closeAddonArchive()" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 text-slate-600 shrink-0" aria-label="닫기">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-                    </button>
-                    <div class="flex-1 min-w-0">
-                        <div class="text-[16px] font-black text-slate-900 leading-tight">📥 추가옵션 보관함</div>
-                        <div id="addon-archive-count-label" class="text-[11px] font-bold text-slate-400 leading-tight">확정 처리된 연장·백업·변경 신청건이 보관돼요</div>
-                    </div>
-                    <button onclick="loadAddonArchive()" class="w-9 h-9 flex items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 shrink-0" aria-label="새로고침">
-                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
-                    </button>
-                </div>
-            </div>
-            <div id="addon-archive-list" class="flex-1 overflow-y-auto" style="padding: 12px calc(12px) calc(28px + env(safe-area-inset-bottom,0px));"></div>
         </div>
     </div>
 
