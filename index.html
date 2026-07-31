@@ -1440,9 +1440,9 @@
         let lastClickedCalDateStr = null; 
 
         function startApp() {
-            renderUpcomingFilters(); 
-            renderReturnUpcomingFilters(); 
-            renderServiceFilters(); 
+            renderUpcomingFilters();
+            renderReturnUpcomingFilters();
+            renderServiceFilters();
             updateSortUI();
             loadBlacklist(); // [NEW] 예약 목록에 "사기" 뱃지가 처음부터 표시되도록 미리 로드
             fetchData();
@@ -2939,7 +2939,7 @@
                 const isCancel = String(item.category).includes('취소') || model.includes('취소') || String(item.memo).includes('취소') || status.includes('취소');
                 const hasBattery = model.includes('보조배터리');
                 // [NEW] 연장/백업/변경/취소 신청건(별도 행) — 부가서비스 필터에는 이 추가옵션 내역만 세고 보여줌
-                const isRequestRow = ['연장신청', '백업신청', '변경신청', '취소신청'].includes(String(item.category));
+                const isRequestRow = ['연장신청', '백업신청', '변경신청', '취소신청', '주소변경신청'].includes(String(item.category));
                 // [NEW] 신규 예약: 신청건이 아닌 원예약 중 상태가 '예약신청' 또는 '대기'인 것
                 const isNewReservation = !isRequestRow && (status === '예약신청' || status === '대기');
                 // [NEW] 블랙리스트 매치: 원예약/신청건 상관없이 이름 또는 연락처가 블랙리스트에 있으면 매치
@@ -3707,7 +3707,7 @@
                 try {
                     const nowIso = new Date().toISOString();
                     // [수정] 연장/백업/변경/취소 "신청건"은 삭제해도 상태를 '취소'로 바꾸지 않고 그대로 유지(예: 확정 유지). 원예약(예약신청)만 '취소'로 고정
-                    const requestCategories = ['연장신청', '백업신청', '변경신청', '취소신청'];
+                    const requestCategories = ['연장신청', '백업신청', '변경신청', '취소신청', '주소변경신청'];
                     const requestIds = items.filter(it => requestCategories.includes(String(it.category))).map(it => Number(it.row));
                     const normalIds = items.filter(it => !requestCategories.includes(String(it.category))).map(it => Number(it.row));
 
@@ -5309,7 +5309,7 @@
             const targetItem = allData.find(item => String(item.row) === String(rowId));
 
             // [수정] 연장/백업/변경/취소 "신청건"은 삭제해도 상태를 '취소'로 바꾸지 않고 그대로 유지(예: 확정 유지). 원예약(예약신청)만 '취소'로 고정
-            const isRequestRow = ['연장신청', '백업신청', '변경신청', '취소신청'].includes(String(targetItem && targetItem.category));
+            const isRequestRow = ['연장신청', '백업신청', '변경신청', '취소신청', '주소변경신청'].includes(String(targetItem && targetItem.category));
             const newStatus = isRequestRow ? ((targetItem && targetItem.status) || '확정') : '취소';
             showAppConfirm("휴지통으로 이동하시겠습니까?\n(목록에서 삭제되지만, 휴지통에서 복원할 수 있어요)", () => {
                 trashMoveSingle(rowId, targetItem, newStatus);
