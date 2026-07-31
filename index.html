@@ -384,6 +384,7 @@
                 <div id="hdr-more-backdrop" class="hidden hdr-more-backdrop" onclick="closeMoreMenu()"></div>
                 <div id="hdr-more-menu" class="hidden hdr-more-menu">
                     <button class="hdr-more-item" onclick="closeMoreMenu(); openSettings();"><span class="hdr-more-ico" style="background:#eef2ff; color:#4f46e5;">⚙️</span> 설정</button>
+                    <button class="hdr-more-item" onclick="closeMoreMenu(); switchViewMode();"><span class="hdr-more-ico" style="background:#eef2ff; color:#4f46e5;">🔀</span> 화면 전환(PC/모바일)</button>
                     <button class="hdr-more-item" onclick="closeMoreMenu(); window.open('https://kimpo97-netizen.github.io/admin/', '_blank');"><span class="hdr-more-ico" style="background:#f5f3ff; color:#7c3aed;">🏟️</span> 공연장</button>
                     <button class="hdr-more-item" onclick="closeMoreMenu(); openSales();"><span class="hdr-more-ico" style="background:#ecfdf5; color:#059669;">📊</span> 매출 통계</button>
                     <button class="hdr-more-item" onclick="closeMoreMenu(); openTrash();"><span class="hdr-more-ico" style="background:#fff1f2; color:#e11d48;">🗑️</span> 휴지통</button>
@@ -1093,6 +1094,7 @@
             startApp();
         }
         async function doLogout() { await sb.auth.signOut(); location.reload(); }
+        function switchViewMode() { localStorage.removeItem('sc_admin_view_pref'); location.href = '관리자.html'; }
 
         // ===== 일괄작업 묶음 처리 (동시 실행으로 빠르게) =====
         function buildPatch(u) {
@@ -1430,7 +1432,8 @@
         let selectedReturnUpcomingFilters = [];
         let isViewAllReturnUpcoming = false;
 
-        let currentServiceFilter = null; 
+        let currentServiceFilter = null;
+        let serviceFilterAutoOff = false; // [NEW] 신청·대기중 0건이라 시스템이 자동으로 필터를 끈 상태인지 (사용자가 직접 끈 것과 구분)
 
         let currentCalDate = new Date();
         let tempSelectedDates = [];
@@ -2247,6 +2250,7 @@
         }
 
         function resetAllFilters() {
+            serviceFilterAutoOff = false;
             currentFilterStatus = 'all';
             currentModelFilter = 'all';
             currentDeliveryFilter = 'all';
@@ -2400,6 +2404,7 @@
         }
 
         function viewAllUpcoming() {
+            serviceFilterAutoOff = false;
             if (isViewAllUpcoming) {
                 isViewAllUpcoming = false;
                 selectedUpcomingFilters = [];
@@ -2447,6 +2452,7 @@
         }
 
         function viewAllReturnUpcoming() {
+            serviceFilterAutoOff = false;
             if (isViewAllReturnUpcoming) {
                 isViewAllReturnUpcoming = false;
                 selectedReturnUpcomingFilters = [];
@@ -2494,6 +2500,7 @@
         }
 
         function setUpcomingFilter(del, mod) {
+            serviceFilterAutoOff = false;
             isViewAllUpcoming = false;
             
             const existingIdx = selectedUpcomingFilters.findIndex(f => f.method === del && f.value === mod);
@@ -2555,6 +2562,7 @@
         }
 
         function setReturnUpcomingFilter(ret, mod) {
+            serviceFilterAutoOff = false;
             isViewAllReturnUpcoming = false;
             
             const existingIdx = selectedReturnUpcomingFilters.findIndex(f => f.method === ret && f.value === mod);
@@ -2616,6 +2624,7 @@
         }
 
         function setServiceFilter(svc) {
+            serviceFilterAutoOff = false;
             if (currentServiceFilter === svc) {
                 currentServiceFilter = null;
             } else {
@@ -2928,7 +2937,7 @@
                 const isExtension = String(item.category).includes('연장') || model.includes('연장') || String(item.memo).includes('연장');
                 const isChange = String(item.category).includes('변경') || model.includes('변경') || String(item.memo).includes('변경');
                 const isCancel = String(item.category).includes('취소') || model.includes('취소') || String(item.memo).includes('취소') || status.includes('취소');
-                const hasBattery = model.includes('보조배터리'); 
+                const hasBattery = model.includes('보조배터리');
                 // [NEW] 연장/백업/변경/취소 신청건(별도 행) — 부가서비스 필터에는 이 추가옵션 내역만 세고 보여줌
                 const isRequestRow = ['연장신청', '백업신청', '변경신청', '취소신청'].includes(String(item.category));
                 // [NEW] 신규 예약: 신청건이 아닌 원예약 중 상태가 '예약신청' 또는 '대기'인 것
@@ -2937,16 +2946,17 @@
                 const isBlMatch = isBlacklisted(item.name, item.phone);
 
                 const matchQuery = query === '' || Object.values(item).some(val => String(val).toLowerCase().includes(query));
-                
+
                 if (matchQuery) {
                     if (isRequestRow) {
                         if (!status.includes('취소')) {
-                            if (isBackup) counts.service.backup++;
                             if (isExtension) counts.service.extension++;
                             if (isChange) counts.service.change++;
                         }
                         if (isCancel) counts.service.cancel++;
                     }
+                    // [NEW] 백업은 신청건이든 원예약이든(메모/카테고리/모델에 '백업' 표시가 있는 한) 동일하게 집계
+                    if (isBackup && !status.includes('취소')) counts.service.backup++;
                     if (isNewReservation) counts.service.newReservation++;
                     if (isBlMatch) counts.service.blacklist++;
                 }
@@ -2958,13 +2968,16 @@
                     if (currentServiceFilter === 'blacklist') {
                         return isBlMatch && matchQuery;
                     }
-                    // [NEW] 추가옵션 내역(연장/백업/변경/취소 신청건)만 표시, 원예약 제외
+                    // [NEW] 백업 필터는 신청건뿐 아니라, 메모/카테고리/모델에 '백업' 표시가 있는 원예약도 함께 표시
+                    if (currentServiceFilter === 'backup') {
+                        return isBackup && matchQuery;
+                    }
+                    // [NEW] 추가옵션 내역(연장/변경/취소 신청건)만 표시, 원예약 제외
                     if (!isRequestRow) return false;
-                    if (currentServiceFilter === 'backup' && !isBackup) return false;
                     if (currentServiceFilter === 'extension' && !isExtension) return false;
                     if (currentServiceFilter === 'change' && !isChange) return false;
                     if (currentServiceFilter === 'cancel' && !isCancel) return false;
-                    return matchQuery; 
+                    return matchQuery;
                 }
 
                 let diffDays = -1;
@@ -3147,6 +3160,20 @@
 
                 return matchViewMode && matchQuery && matchDate && matchReturnDate && matchModel && matchDelivery && matchReturn && matchDeliverySub;
             });
+
+            // [NEW] 신청·대기중인 예약이 없으면 필터를 자동으로 해제 (있으면 자동으로 다시 켜짐 — 사용자가 직접 끈 경우는 제외)
+            const shouldAutoOff = currentServiceFilter === 'newReservation' && counts.service.newReservation === 0;
+            const shouldAutoOn = currentServiceFilter === null && serviceFilterAutoOff && counts.service.newReservation > 0;
+            if (shouldAutoOff || shouldAutoOn) {
+                currentServiceFilter = shouldAutoOff ? null : 'newReservation';
+                serviceFilterAutoOff = shouldAutoOff;
+                document.querySelectorAll('.svc-header, .svc-mini').forEach(btn => {
+                    if (currentServiceFilter === btn.dataset.svc) btn.classList.add('active');
+                    else btn.classList.remove('active');
+                });
+                filterData(isSoftRefresh);
+                return;
+            }
 
             updateFilterUI(counts);
             
@@ -3679,8 +3706,19 @@
 
                 try {
                     const nowIso = new Date().toISOString();
-                    const { error } = await sb.from('reservations').update({ status: '취소', deleted_at: nowIso }).in('id', items.map(it => Number(it.row)));
-                    if (error) throw new Error(error.message);
+                    // [수정] 연장/백업/변경/취소 "신청건"은 삭제해도 상태를 '취소'로 바꾸지 않고 그대로 유지(예: 확정 유지). 원예약(예약신청)만 '취소'로 고정
+                    const requestCategories = ['연장신청', '백업신청', '변경신청', '취소신청'];
+                    const requestIds = items.filter(it => requestCategories.includes(String(it.category))).map(it => Number(it.row));
+                    const normalIds = items.filter(it => !requestCategories.includes(String(it.category))).map(it => Number(it.row));
+
+                    if (requestIds.length) {
+                        const { error } = await sb.from('reservations').update({ deleted_at: nowIso }).in('id', requestIds);
+                        if (error) throw new Error(error.message);
+                    }
+                    if (normalIds.length) {
+                        const { error } = await sb.from('reservations').update({ status: '취소', deleted_at: nowIso }).in('id', normalIds);
+                        if (error) throw new Error(error.message);
+                    }
                     showAppAlert(`${items.length}건을 휴지통으로 이동했습니다.`, "일괄 처리 완료", "🗑️");
                 } catch (err) {
                     console.error("일괄 삭제 실패", err);
@@ -3690,7 +3728,7 @@
                 }
             };
 
-            // [수정] 결제됨/안됨 분기 제거 — 무조건 휴지통 이동, 상태는 '취소'로 고정
+            // [수정] 결제됨/안됨 분기 제거 — 무조건 휴지통 이동, 신청건 외에는 상태를 '취소'로 고정
             showAppConfirm(`선택한 ${items.length}개를 휴지통으로 이동하시겠습니까?\n(휴지통에서 복원할 수 있어요)`, execute, "휴지통으로 이동", "이동하기", "bg-[#DC2626]", "🗑️");
         }
 
@@ -5270,9 +5308,11 @@
             const rowId = document.getElementById('edit-row').value;
             const targetItem = allData.find(item => String(item.row) === String(rowId));
 
-            // [수정] 결제됨/안됨 분기 제거 — 무조건 휴지통 이동, 상태는 '취소'로 고정
+            // [수정] 연장/백업/변경/취소 "신청건"은 삭제해도 상태를 '취소'로 바꾸지 않고 그대로 유지(예: 확정 유지). 원예약(예약신청)만 '취소'로 고정
+            const isRequestRow = ['연장신청', '백업신청', '변경신청', '취소신청'].includes(String(targetItem && targetItem.category));
+            const newStatus = isRequestRow ? ((targetItem && targetItem.status) || '확정') : '취소';
             showAppConfirm("휴지통으로 이동하시겠습니까?\n(목록에서 삭제되지만, 휴지통에서 복원할 수 있어요)", () => {
-                trashMoveSingle(rowId, targetItem, '취소');
+                trashMoveSingle(rowId, targetItem, newStatus);
             }, "휴지통으로 이동", "이동하기", "bg-[#DC2626]", "🗑️");
         }
 
