@@ -658,6 +658,8 @@
                         <span class="text-[11px] font-black text-slate-400 w-12 shrink-0">추가작업</span>
                         <button onclick="bulkExtendRental()" class="text-[13px] font-bold bg-sky-50 text-sky-600 hover:bg-sky-100 px-4 py-2 rounded-lg transition-colors border border-sky-200 flex items-center gap-1.5 shadow-sm">⏳ 연장 (+1일)</button>
                         <button onclick="bulkAddBackupMemo()" class="text-[13px] font-bold bg-amber-50 text-amber-600 hover:bg-amber-100 px-4 py-2 rounded-lg transition-colors border border-amber-200 flex items-center gap-1.5 shadow-sm">💾 백업 추가</button>
+                        <button onclick="bulkSendAlimtalk('venue_unavailable')" class="text-[13px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 px-4 py-2 rounded-lg transition-colors border border-rose-200 flex items-center gap-1.5 shadow-sm">🚫 공연장 불가</button>
+                        <button onclick="bulkSendAlimtalk('venue_guide')" class="text-[13px] font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-4 py-2 rounded-lg transition-colors border border-indigo-200 flex items-center gap-1.5 shadow-sm">📍 공연장 안내</button>
                     </div>
 
                     <div id="bulk-backup-actions" class="hidden items-center justify-start gap-2 w-full mt-1">
@@ -4134,6 +4136,116 @@
                 filterData(true);
                 showAppAlert("저장에 실패하여 원상복구 되었습니다.", "🚨 실패", "⚠️");
             }
+        }
+
+        const ALIMTALK_TEMPLATES = {
+            venue_unavailable: { label: '공연장 불가', sentField: 'venueUnavailableSentAt' },
+            venue_guide: { label: '공연장 안내', sentField: 'venueGuideSentAt' },
+        };
+
+        function bulkSendAlimtalk(templateKey) {
+            if (selectedRows.length === 0) return;
+            const tpl = ALIMTALK_TEMPLATES[templateKey];
+            if (!tpl) return;
+
+            const items = selectedRows
+                .map(rowId => allData.find(item => String(item.row) === String(rowId)))
+                .filter(item => item && item.phone);
+
+            if (items.length === 0) {
+                showAppAlert("선택한 건에 유효한 연락처가 없습니다.", "🚨 발송 불가", "⚠️");
+                return;
+            }
+
+            const alreadySentCount = items.filter(item => item[tpl.sentField]).length;
+            if (alreadySentCount > 0) {
+                showAlimtalkResendChoice(templateKey, items, alreadySentCount);
+            } else {
+                confirmAndSendAlimtalk(templateKey, items);
+            }
+        }
+
+        // 선택한 건 중 일부(또는 전부)가 이미 발송된 경우, 안 보낸 사람만/모두 중 선택하게 함
+        function showAlimtalkResendChoice(templateKey, items, alreadySentCount) {
+            const tpl = ALIMTALK_TEMPLATES[templateKey];
+            const unsentCount = items.length - alreadySentCount;
+            setupModal(
+                "이미 발송한 건 포함",
+                `선택한 ${items.length}건 중 ${alreadySentCount}건은 이미 '${tpl.label}' 알림톡을 받았습니다.\n어떻게 발송할까요?`,
+                "🤔",
+                `
+                <div class="flex flex-col gap-2 mt-2">
+                    <button id="alimtalk-choice-unsent" ${unsentCount === 0 ? 'disabled' : ''} class="w-full ${unsentCount === 0 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-indigo-600 hover:opacity-90 text-white'} font-bold py-3.5 rounded-xl text-base transition-all">안 보낸 고객에게만 보내기 (${unsentCount}명)</button>
+                    <button id="alimtalk-choice-all" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3.5 rounded-xl text-base transition-colors">모두 보내기 (${items.length}명)</button>
+                    <button onclick="closeAppModal()" class="w-full text-slate-400 hover:text-slate-600 font-bold py-2 text-sm transition-colors">취소</button>
+                </div>
+                `
+            );
+            if (unsentCount > 0) {
+                document.getElementById('alimtalk-choice-unsent').onclick = () => {
+                    closeAppModal();
+                    confirmAndSendAlimtalk(templateKey, items.filter(item => !item[tpl.sentField]));
+                };
+            }
+            document.getElementById('alimtalk-choice-all').onclick = () => {
+                closeAppModal();
+                confirmAndSendAlimtalk(templateKey, items);
+            };
+        }
+
+        function confirmAndSendAlimtalk(templateKey, items) {
+            if (items.length === 0) return;
+            const tpl = ALIMTALK_TEMPLATES[templateKey];
+
+            const phones = [...new Set(
+                items.map(item => String(item.phone).replace(/[^0-9]/g, '')).filter(p => p.length >= 10)
+            )];
+
+            if (phones.length === 0) {
+                showAppAlert("선택한 건에 유효한 연락처가 없습니다.", "🚨 발송 불가", "⚠️");
+                return;
+            }
+
+            showAppConfirm(
+                `${items.length}건(연락처 ${phones.length}명)에게\n'${tpl.label}' 알림톡을 발송하시겠습니까?`,
+                async () => {
+                    try {
+                        const { data, error } = await sb.functions.invoke('send-alimtalk', {
+                            body: { templateKey, phones }
+                        });
+                        if (error) throw error;
+                        if (data && data.error) throw new Error(data.error);
+
+                        const nowIso = new Date().toISOString();
+                        const rowIds = items.map(item => item.row);
+                        rowIds.forEach(rowId => {
+                            const idx = allData.findIndex(item => String(item.row) === String(rowId));
+                            if (idx !== -1) allData[idx][tpl.sentField] = nowIso;
+                        });
+                        clearSelection();
+                        filterData(true);
+
+                        try {
+                            await Promise.all(rowIds.map(rowId =>
+                                sb.from('reservations').update({ [tpl.sentField]: nowIso }).eq('id', Number(rowId))
+                            ));
+                        } catch (e) {
+                            console.error(`${tpl.sentField} 저장 실패`, e);
+                        }
+
+                        if (data && data.failed > 0) {
+                            showAppAlert(`${data.sent}명 발송 성공, ${data.failed}명 발송 실패했습니다. 콘솔 로그를 확인해 주세요.`, "⚠️ 일부 발송 실패", "⚠️");
+                            console.error("알림톡 일부 발송 실패", data.results);
+                        } else {
+                            showAppAlert(`${phones.length}명에게 '${tpl.label}' 알림톡을 발송했습니다.`, "발송 완료", "📨");
+                        }
+                    } catch (err) {
+                        console.error("알림톡 발송 실패", err);
+                        showAppAlert("알림톡 발송에 실패했습니다: " + (err.message || err), "🚨 발송 실패", "⚠️");
+                    }
+                },
+                "알림톡 발송", "발송", "bg-indigo-600", "📨"
+            );
         }
 
         async function bulkSetBackupStatus(status) {
