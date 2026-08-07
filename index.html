@@ -97,6 +97,14 @@
         .model-select-chip:hover, .method-chip:hover { background-color: #F8FAFC; }
         .model-select-chip.active, .method-chip.active { background: #1E293B; color: white; border-color: #1E293B; }
 
+        /* 수령 방법 선택 칩 (일괄 수령변경 / 주소변경 확정 팝업 공용) */
+        .delivery-choice-btn { padding: 6px 12px; border-radius: 8px; border: 1px solid #E2E8F0; background: white; color: #64748B; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.15s ease; white-space: nowrap; }
+        .delivery-choice-btn:hover { background-color: #F8FAFC; }
+        .delivery-choice-btn.dc-post.active { background: #F97316; border-color: #F97316; color: #fff; }
+        .delivery-choice-btn.dc-quick.active { background: #0EA5E9; border-color: #0EA5E9; color: #fff; }
+        .delivery-choice-btn.dc-venue.active { background: #6366F1; border-color: #6366F1; color: #fff; }
+        .delivery-choice-btn.dc-office.active { background: #10B981; border-color: #10B981; color: #fff; }
+
         @keyframes fade-in-up { 0% { opacity: 0; transform: translate(-50%, 20px); } 100% { opacity: 1; transform: translate(-50%, 0); } }
         .toast-msg { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); background: #191F28; color: white; padding: 14px 24px; border-radius: 50px; font-size: 14px; font-weight: 700; z-index: 1000; animation: fade-in-up 0.3s ease-out; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
 
@@ -656,6 +664,7 @@
 
                     <div class="flex flex-wrap items-center justify-start gap-2 w-full mt-1">
                         <span class="text-[11px] font-black text-slate-400 w-12 shrink-0">추가작업</span>
+                        <button onclick="openBulkDeliveryModal()" class="text-[13px] font-bold bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-800 px-4 py-2 rounded-lg transition-colors shadow-sm flex items-center gap-1.5">🚚 수령 변경</button>
                         <button onclick="bulkExtendRental()" class="text-[13px] font-bold bg-sky-50 text-sky-600 hover:bg-sky-100 px-4 py-2 rounded-lg transition-colors border border-sky-200 flex items-center gap-1.5 shadow-sm">⏳ 연장 (+1일)</button>
                         <button onclick="bulkAddBackupMemo()" class="text-[13px] font-bold bg-amber-50 text-amber-600 hover:bg-amber-100 px-4 py-2 rounded-lg transition-colors border border-amber-200 flex items-center gap-1.5 shadow-sm">💾 백업 추가</button>
                         <button onclick="bulkSendAlimtalk('venue_unavailable')" class="text-[13px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 px-4 py-2 rounded-lg transition-colors border border-rose-200 flex items-center gap-1.5 shadow-sm">🚫 공연장 불가</button>
@@ -925,6 +934,60 @@
         </div>
     </div>
 
+    <!-- 수령 방법 일괄 변경 모달 -->
+    <div id="bulk-delivery-modal" class="fixed inset-0 hidden flex items-center justify-center p-6" style="z-index: 9999;">
+        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onclick="closeBulkDeliveryModal()"></div>
+        <div class="bg-white rounded-[24px] p-6 w-full max-w-md relative z-10 shadow-2xl flex flex-col transform transition-all max-h-[85vh]">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-black text-slate-900 flex items-center gap-2">🚚 수령 방법 변경</h3>
+                <button onclick="closeBulkDeliveryModal()" class="text-slate-400 hover:text-slate-600 p-1">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            </div>
+            <p class="text-[13px] text-slate-500 font-medium mb-3 leading-relaxed break-keep">
+                선택한 <span id="bulk-delivery-count" class="font-bold text-blue-600">0</span>건의 수령 방법을 <strong>택배</strong>, <strong>퀵</strong>, <strong>공연장</strong> 중에서 골라주세요. 여러 건을 한번에 선택했다면, 아래 목록에서 건별로 각각 다르게 지정할 수도 있어요.
+            </p>
+            <div class="flex gap-2 mb-4">
+                <button type="button" onclick="applyBulkDeliveryToAll('택배수령')" class="flex-1 text-[13px] font-bold bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-800 py-2.5 rounded-lg transition-colors">📦 전체 택배로</button>
+                <button type="button" onclick="applyBulkDeliveryToAll('퀵수령')" class="flex-1 text-[13px] font-bold bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-600 py-2.5 rounded-lg transition-colors">⚡ 전체 퀵으로</button>
+                <button type="button" onclick="applyBulkDeliveryToAll('공연장수령')" class="flex-1 text-[13px] font-bold bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 py-2.5 rounded-lg transition-colors">🎤 전체 공연장으로</button>
+            </div>
+            <div class="overflow-y-auto flex-1 bg-slate-50 rounded-xl border border-slate-200 p-2.5 mb-6 space-y-2" id="bulk-delivery-list">
+            </div>
+            <div class="flex gap-3 mt-auto pt-2">
+                <button onclick="closeBulkDeliveryModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3.5 rounded-xl transition-colors">취소</button>
+                <button onclick="saveBulkDeliveryChanges()" id="bulk-delivery-save-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition-colors shadow-sm">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 주소변경 확정 시 수령 방법 선택 모달 -->
+    <div id="address-confirm-delivery-modal" class="fixed inset-0 hidden flex items-center justify-center p-6" style="z-index: 9999;">
+        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onclick="cancelAddressConfirmDelivery()"></div>
+        <div class="bg-white rounded-[24px] p-6 w-full max-w-md relative z-10 shadow-2xl flex flex-col transform transition-all max-h-[85vh]">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-black text-slate-900 flex items-center gap-2">📮 주소변경 확정 - 수령 방법</h3>
+                <button onclick="cancelAddressConfirmDelivery()" class="text-slate-400 hover:text-slate-600 p-1">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+            </div>
+            <p class="text-[13px] text-slate-500 font-medium mb-3 leading-relaxed break-keep">
+                주소변경을 확정하면서 수령 방법도 함께 정해주세요. <strong>택배</strong>, <strong>퀵</strong>, <strong>사무실</strong> 중에서 골라주세요.
+            </p>
+            <div class="flex gap-2 mb-4">
+                <button type="button" onclick="applyAddressConfirmDeliveryToAll('택배수령')" class="flex-1 text-[13px] font-bold bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-800 py-2.5 rounded-lg transition-colors">📦 전체 택배로</button>
+                <button type="button" onclick="applyAddressConfirmDeliveryToAll('퀵수령')" class="flex-1 text-[13px] font-bold bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-600 py-2.5 rounded-lg transition-colors">⚡ 전체 퀵으로</button>
+                <button type="button" onclick="applyAddressConfirmDeliveryToAll('사무실수령')" class="flex-1 text-[13px] font-bold bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 py-2.5 rounded-lg transition-colors">🏢 전체 사무실로</button>
+            </div>
+            <div class="overflow-y-auto flex-1 bg-slate-50 rounded-xl border border-slate-200 p-2.5 mb-6 space-y-2" id="address-confirm-delivery-list">
+            </div>
+            <div class="flex gap-3 mt-auto pt-2">
+                <button onclick="cancelAddressConfirmDelivery()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3.5 rounded-xl transition-colors">취소</button>
+                <button onclick="confirmAddressConfirmDelivery()" id="address-confirm-delivery-save-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition-colors shadow-sm">확정하기</button>
+            </div>
+        </div>
+    </div>
+
     <!-- 수령일 달력 모달 -->
     <div id="calendar-modal-root">
         <div class="modal-overlay" onclick="closeCalendarModal()"></div>
@@ -1107,6 +1170,7 @@
             if ('totalPrice' in u) patch.totalPrice = Number(String(u.totalPrice).replace(/[^0-9]/g, '')) || 0;
             if ('memo' in u) patch.memo = u.memo;
             if ('model' in u) patch.model = u.model;
+            if ('delivery' in u) patch.delivery = u.delivery;
             return patch;
         }
         // 여러 건 수정: 동시에 처리 (값이 서로 달라도 OK). 50건도 사실상 1회 왕복 시간.
@@ -3622,6 +3686,18 @@
         async function bulkUpdateStatus(newStatus) {
             if (selectedRows.length === 0) return;
 
+            if (newStatus === '확정') {
+                const addressItems = selectedRows
+                    .map(rowId => allData.find(i => String(i.row) === String(rowId)))
+                    .filter(item => item && item.status !== '확정' && String(item.category || '').includes('주소변경'));
+                if (addressItems.length > 0) {
+                    openAddressConfirmDeliveryModal(addressItems, (choiceMap) => {
+                        proceedBulkUpdateStatus(newStatus, choiceMap);
+                    });
+                    return;
+                }
+            }
+
             if (newStatus === '반납완료') {
                 const today = new Date(); today.setHours(0,0,0,0);
                 const early = selectedRows
@@ -3644,7 +3720,7 @@
             proceedBulkUpdateStatus(newStatus);
         }
 
-        async function proceedBulkUpdateStatus(newStatus) {
+        async function proceedBulkUpdateStatus(newStatus, deliveryChoiceMap = {}) {
             if (selectedRows.length === 0) return;
 
             const originalDataBackup = [];
@@ -3671,7 +3747,7 @@
                         if (String(category || '').includes('연장')) {
                             originSyncTasks.push({ origin_ref: item.origin_ref, type: 'extend', endDate: item.endDate });
                         } else if (String(category || '').includes('주소변경')) {
-                            originSyncTasks.push({ origin_ref: item.origin_ref, type: 'address', address: item.address, zipCode: item.zipCode });
+                            originSyncTasks.push({ origin_ref: item.origin_ref, type: 'address', address: item.address, zipCode: item.zipCode, delivery: deliveryChoiceMap[String(rowId)] });
                         }
                     }
                 }
@@ -3704,7 +3780,9 @@
                         } else if (task.type === 'address') {
                             allData[origIdx].address = task.address;
                             allData[origIdx].zipCode = task.zipCode;
-                            const { error } = await sb.from('reservations').update({ address: task.address, zipcode: task.zipCode }).eq('id', Number(allData[origIdx].row));
+                            const patch = { address: task.address, zipcode: task.zipCode };
+                            if (task.delivery) { allData[origIdx].delivery = task.delivery; patch.delivery = task.delivery; }
+                            const { error } = await sb.from('reservations').update(patch).eq('id', Number(allData[origIdx].row));
                             if (error) console.error('원예약 주소 자동변경 실패:', error);
                         }
                     } catch (e) { console.error('origin_ref 파싱 실패:', e); }
@@ -4037,6 +4115,184 @@
                 filterData(true);
                 showAppAlert("인터넷 연결 불안정으로 일부 송장번호가 저장되지 않았습니다.", "🚨 저장 실패", "⚠️");
             }
+        }
+
+        // ===== 수령 방법 선택 공용 =====
+        const DELIVERY_METHOD_META = {
+            '택배수령': { label: '택배', icon: '📦', cls: 'dc-post' },
+            '퀵수령':   { label: '퀵',   icon: '⚡', cls: 'dc-quick' },
+            '공연장수령': { label: '공연장', icon: '🎤', cls: 'dc-venue' },
+            '사무실수령': { label: '사무실', icon: '🏢', cls: 'dc-office' }
+        };
+        function guessDeliveryMethod(cur) {
+            cur = String(cur || '');
+            if (cur.includes('퀵')) return '퀵수령';
+            if (cur.includes('공연장') || cur.includes('현장')) return '공연장수령';
+            if (cur.includes('사무실')) return '사무실수령';
+            return '택배수령';
+        }
+        function renderDeliveryChoiceButtons(rowId, methods, currentChoice, onclickFnName) {
+            return methods.map(m => {
+                const meta = DELIVERY_METHOD_META[m];
+                const active = currentChoice === m;
+                return `<button type="button" onclick="${onclickFnName}('${rowId}','${m}')" class="delivery-choice-btn ${meta.cls} ${active ? 'active' : ''}">${meta.icon} ${meta.label}</button>`;
+            }).join('');
+        }
+
+        // ===== 수령 방법 일괄 변경 (택배 / 퀵 / 공연장) =====
+        let tempBulkDeliveryChoices = {};
+        const BULK_DELIVERY_METHODS = ['택배수령', '퀵수령', '공연장수령'];
+
+        function openBulkDeliveryModal() {
+            if (selectedRows.length === 0) return;
+            tempBulkDeliveryChoices = {};
+            selectedRows.forEach(rowId => {
+                const item = allData.find(it => String(it.row) === String(rowId));
+                const guess = guessDeliveryMethod(item?.delivery);
+                tempBulkDeliveryChoices[rowId] = BULK_DELIVERY_METHODS.includes(guess) ? guess : '택배수령';
+            });
+            document.getElementById('bulk-delivery-count').innerText = selectedRows.length;
+            renderBulkDeliveryList();
+            document.getElementById('bulk-delivery-modal').classList.remove('hidden');
+        }
+
+        function closeBulkDeliveryModal() {
+            document.getElementById('bulk-delivery-modal').classList.add('hidden');
+        }
+
+        function renderBulkDeliveryList() {
+            const listEl = document.getElementById('bulk-delivery-list');
+            listEl.innerHTML = '';
+
+            const sortedSelectedRows = [...selectedRows].sort((a, b) => {
+                const idxA = currentlyFilteredList.findIndex(item => String(item.row) === String(a));
+                const idxB = currentlyFilteredList.findIndex(item => String(item.row) === String(b));
+                return idxA - idxB;
+            });
+
+            sortedSelectedRows.forEach(rowId => {
+                const item = allData.find(it => String(it.row) === String(rowId));
+                const choice = tempBulkDeliveryChoices[rowId] || '택배수령';
+                const displayModel = item ? String(item.model || '').replace(/\s*\+?\s*보조배터리/g, '').trim() : '';
+
+                const card = document.createElement('div');
+                card.className = "flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl shadow-sm gap-2";
+                card.innerHTML = `
+                    <div class="flex-1 overflow-hidden min-w-0">
+                        <div class="text-[13px] font-black text-slate-800 truncate">${item ? item.name : '알 수 없음'} <span class="text-slate-400 font-bold text-[11px]">(${item?.phone || '-'})</span></div>
+                        <div class="text-[11px] text-blue-600 font-bold mt-0.5 truncate">${displayModel || '기종미정'}</div>
+                    </div>
+                    <div class="shrink-0 flex items-center gap-1.5">${renderDeliveryChoiceButtons(rowId, BULK_DELIVERY_METHODS, choice, 'selectBulkDeliveryChoice')}</div>
+                `;
+                listEl.appendChild(card);
+            });
+        }
+
+        function selectBulkDeliveryChoice(rowId, method) {
+            tempBulkDeliveryChoices[rowId] = method;
+            renderBulkDeliveryList();
+        }
+
+        function applyBulkDeliveryToAll(method) {
+            selectedRows.forEach(rowId => { tempBulkDeliveryChoices[rowId] = method; });
+            renderBulkDeliveryList();
+        }
+
+        async function saveBulkDeliveryChanges() {
+            if (selectedRows.length === 0) return;
+            const btn = document.getElementById('bulk-delivery-save-btn');
+            btn.innerText = '저장 중...'; btn.disabled = true;
+
+            const originalDataBackup = [];
+            const updates = [];
+
+            selectedRows.forEach(rowId => {
+                const targetIndex = allData.findIndex(item => String(item.row) === String(rowId));
+                if (targetIndex !== -1) {
+                    originalDataBackup.push({ index: targetIndex, data: { ...allData[targetIndex] } });
+                    const method = tempBulkDeliveryChoices[rowId] || '택배수령';
+                    allData[targetIndex].delivery = method;
+                    updates.push({ row: rowId, delivery: method, orderTime: allData[targetIndex].orderTime, phone: allData[targetIndex].phone });
+                }
+            });
+
+            closeBulkDeliveryModal();
+            clearSelection();
+            filterData(true);
+            showAppAlert(`${updates.length}건의 수령 방법을 변경했습니다.`, "일괄 변경 완료", "✅");
+
+            try {
+                await sbBatchUpdate(updates);
+            } catch (err) {
+                console.error("수령 방법 일괄 저장 실패", err);
+                originalDataBackup.forEach(backup => { Object.assign(allData[backup.index], backup.data); });
+                filterData(true);
+                showAppAlert("인터넷 연결 불안정으로 일부 변경사항이 저장되지 않았습니다.", "🚨 저장 실패", "⚠️");
+            } finally {
+                btn.innerText = '저장'; btn.disabled = false;
+            }
+        }
+
+        // ===== 주소변경 확정 시 수령 방법 선택 팝업 =====
+        let tempAddressConfirmChoices = {};
+        let addressConfirmPendingItems = [];
+        let addressConfirmOnResolve = null;
+        const ADDRESS_CONFIRM_DELIVERY_METHODS = ['택배수령', '퀵수령', '사무실수령'];
+
+        function openAddressConfirmDeliveryModal(items, onResolve) {
+            addressConfirmPendingItems = items;
+            addressConfirmOnResolve = onResolve;
+            tempAddressConfirmChoices = {};
+            items.forEach(item => {
+                const guess = guessDeliveryMethod(item.delivery);
+                tempAddressConfirmChoices[String(item.row)] = ADDRESS_CONFIRM_DELIVERY_METHODS.includes(guess) ? guess : '택배수령';
+            });
+            renderAddressConfirmDeliveryList();
+            document.getElementById('address-confirm-delivery-modal').classList.remove('hidden');
+        }
+
+        function cancelAddressConfirmDelivery() {
+            document.getElementById('address-confirm-delivery-modal').classList.add('hidden');
+            addressConfirmPendingItems = [];
+            addressConfirmOnResolve = null;
+        }
+
+        function renderAddressConfirmDeliveryList() {
+            const listEl = document.getElementById('address-confirm-delivery-list');
+            listEl.innerHTML = '';
+            addressConfirmPendingItems.forEach(item => {
+                const rowId = String(item.row);
+                const choice = tempAddressConfirmChoices[rowId] || '택배수령';
+                const card = document.createElement('div');
+                card.className = "flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl shadow-sm gap-2";
+                card.innerHTML = `
+                    <div class="flex-1 overflow-hidden min-w-0">
+                        <div class="text-[13px] font-black text-slate-800 truncate">${item.name || '-'} <span class="text-slate-400 font-bold text-[11px]">(${item.phone || '-'})</span></div>
+                        <div class="text-[11px] text-rose-600 font-bold mt-0.5 truncate">→ ${item.address || '-'}</div>
+                    </div>
+                    <div class="shrink-0 flex items-center gap-1.5">${renderDeliveryChoiceButtons(rowId, ADDRESS_CONFIRM_DELIVERY_METHODS, choice, 'selectAddressConfirmChoice')}</div>
+                `;
+                listEl.appendChild(card);
+            });
+        }
+
+        function selectAddressConfirmChoice(rowId, method) {
+            tempAddressConfirmChoices[rowId] = method;
+            renderAddressConfirmDeliveryList();
+        }
+
+        function applyAddressConfirmDeliveryToAll(method) {
+            addressConfirmPendingItems.forEach(item => { tempAddressConfirmChoices[String(item.row)] = method; });
+            renderAddressConfirmDeliveryList();
+        }
+
+        function confirmAddressConfirmDelivery() {
+            const choiceMap = { ...tempAddressConfirmChoices };
+            const resolve = addressConfirmOnResolve;
+            document.getElementById('address-confirm-delivery-modal').classList.add('hidden');
+            addressConfirmPendingItems = [];
+            addressConfirmOnResolve = null;
+            if (resolve) resolve(choiceMap);
         }
 
         async function bulkExtendRental() {
@@ -5327,11 +5583,30 @@
             document.querySelectorAll('.model-select-chip').forEach(btn => btn.classList.toggle('active', btn.dataset.val === modelName));
         }
 
+        let pendingSingleAddressDelivery = null;
+        let addressConfirmGateBypassRowId = null;
+
         async function submitUpdate(e) {
             if(e) e.preventDefault();
+
+            const gateRowId = document.getElementById('edit-row').value;
+            const gateNewStatus = document.getElementById('edit-status-val').value;
+            const gateTargetItem = allData.find(item => String(item.row) === String(gateRowId));
+            const needsAddressGate = gateTargetItem && String(gateTargetItem.category || '').includes('주소변경') &&
+                gateNewStatus === '확정' && gateTargetItem.status !== '확정';
+            if (needsAddressGate && addressConfirmGateBypassRowId !== gateRowId) {
+                openAddressConfirmDeliveryModal([gateTargetItem], (choiceMap) => {
+                    pendingSingleAddressDelivery = choiceMap[String(gateRowId)];
+                    addressConfirmGateBypassRowId = gateRowId;
+                    submitUpdate();
+                });
+                return;
+            }
+            addressConfirmGateBypassRowId = null;
+
             const btn = document.getElementById('save-btn');
             btn.innerText = '저장 중...'; btn.disabled = true;
-            
+
             const rowId = document.getElementById('edit-row').value;
             const modelType = document.getElementById('edit-model-type').value;
             const deviceId = document.getElementById('edit-device-id').value.trim();
@@ -5429,11 +5704,15 @@
                 if (addressChangeOrigIdx !== -1) {
                     const newAddress = payload.address;
                     const newZipCode = payload.zipCode;
+                    const chosenDelivery = pendingSingleAddressDelivery;
                     allData[addressChangeOrigIdx].address = newAddress;
                     allData[addressChangeOrigIdx].zipCode = newZipCode;
+                    const patch = { address: newAddress, zipcode: newZipCode };
+                    if (chosenDelivery) { allData[addressChangeOrigIdx].delivery = chosenDelivery; patch.delivery = chosenDelivery; }
                     filterData(true);
-                    sb.from('reservations').update({ address: newAddress, zipcode: newZipCode }).eq('id', Number(allData[addressChangeOrigIdx].row))
+                    sb.from('reservations').update(patch).eq('id', Number(allData[addressChangeOrigIdx].row))
                       .then(({ error }) => { if (error) console.error('원예약 주소 자동변경 실패:', error); });
+                    pendingSingleAddressDelivery = null;
                 }
                 // [NEW] 메인 저장이 성공한 뒤에만 신청건을 휴지통으로 이동 (상태는 '확정' 그대로 유지)
                 if (shouldAutoTrash) {
