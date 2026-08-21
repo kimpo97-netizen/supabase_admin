@@ -12,6 +12,7 @@
         .top-2\.5{top:.625rem}
         .right-2\.5{right:.625rem}
         .w-4{width:1rem}
+        .h-1\.5{height:.375rem}
         .shadow{--tw-shadow:0 1px 3px 0 rgba(0,0,0,.1),0 1px 2px -1px rgba(0,0,0,.1);box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}
         .translate-x-4{--tw-translate-x:1rem}
         .translate-x-0\.5{--tw-translate-x:.125rem}
@@ -1311,8 +1312,23 @@
         // ===================== [NEW] 물품보관함 (사무실 수령 고객용) =====================
         let lockers = [];
         let lockerAssignTargetRow = null; // 배치 대상 예약의 row id. null이면 일반 관리 모드.
-        let lockerInlineEditNumber = null; // 배정숫자를 인라인 편집 중인 보관함 번호
+        let lockerDetailNumber = null; // 상세 편집 팝업(바텀시트)에 열려있는 보관함 번호
         const LOCKER_TOTAL = 27; // 실제 보관함 개수 (DB에 더 있어도 화면/기능은 이 개수만 사용)
+
+        function openLockerDetail(n) {
+            lockerDetailNumber = n;
+            renderLockerDetailSheet();
+            document.getElementById('locker-detail-sheet-root').classList.remove('hidden');
+        }
+        function closeLockerDetailSheet() {
+            document.getElementById('locker-detail-sheet-root').classList.add('hidden');
+            lockerDetailNumber = null;
+        }
+        // 보관함 데이터가 바뀔 때마다 3x9 그리드와 (열려있다면) 상세 팝업을 함께 새로고침합니다.
+        function refreshLockerViews() {
+            renderLockerGrid();
+            if (lockerDetailNumber != null) renderLockerDetailSheet();
+        }
 
         function openLockerManager() {
             lockerAssignTargetRow = null;
@@ -1330,10 +1346,11 @@
             document.getElementById('locker-overlay').classList.add('hidden');
             document.body.style.overflow = '';
             lockerAssignTargetRow = null;
+            closeLockerDetailSheet();
         }
         function clearLockerAssignTarget() {
             lockerAssignTargetRow = null;
-            renderLockerGrid();
+            refreshLockerViews();
         }
 
         async function loadLockers() {
@@ -1361,108 +1378,170 @@
             }));
         }
 
+        // 보관함 하나의 상태(테두리/점 색상, 배지, 흐림 여부)를 계산합니다. 그리드 타일과 상세 팝업이 함께 사용합니다.
+        function computeLockerState(l, targetModelBase) {
+            const n = l.locker_number;
+            const isAdmin = !!l.is_admin;
+            const isTarget = !!lockerAssignTargetRow && l.reservation_id != null && Number(l.reservation_id) === Number(lockerAssignTargetRow);
+            const occupant = l.reservation_id != null ? allData.find(it => Number(it.row) === Number(l.reservation_id)) : null;
+            const parsed = parseLockerDeviceModel(l.device_model);
+
+            let stateCls = 'border-slate-200 bg-white';
+            let statusBadge = '<span class="text-xs font-bold text-slate-300">비어있음</span>';
+            if (isTarget) {
+                stateCls = 'border-emerald-300 bg-emerald-50';
+                statusBadge = '<span class="text-xs font-black text-emerald-600">✓ 배치됨</span>';
+            } else if (l.reservation_id != null) {
+                stateCls = 'border-amber-200 bg-amber-50';
+                const namePrefix = l.device_model ? `${parsed.base || ''}${parsed.number || ''} ` : '';
+                statusBadge = `<span class="text-xs font-bold text-amber-600 truncate">${escapeHtml(namePrefix + (occupant ? occupant.name : '사용중'))}</span>`;
+            }
+            if (isAdmin) {
+                stateCls = 'border-rose-300 bg-rose-50';
+                statusBadge = '<span class="text-xs font-black text-rose-600">관리자용(창고)</span>';
+            }
+            // 배치 대상 예약의 대여모델과 다른 보관함은 연회색으로 흐리게 처리 (배정숫자는 무시하고 모델만 비교)
+            const isDimmed = !!(targetModelBase && !isTarget && parsed.base !== targetModelBase);
+            if (isDimmed) {
+                stateCls = 'border-slate-100 bg-slate-50 opacity-60';
+            }
+
+            // 압축 타일에 보여줄 한 줄 요약: 배정됨 → 고객명 / 모델만 있음 → 모델+배정번호 / 그 외 → 비어있음(관리자용은 별도 표기)
+            let summaryText, summaryCls;
+            if (isAdmin) {
+                summaryText = l.device_model ? String(l.device_model) : '관리자용';
+                summaryCls = 'text-rose-500';
+            } else if (l.reservation_id != null) {
+                const namePrefix = l.device_model ? `${parsed.base || ''}${parsed.number || ''} ` : '';
+                summaryText = namePrefix + (occupant ? occupant.name : '사용중');
+                summaryCls = isTarget ? 'text-emerald-600' : 'text-amber-600';
+            } else if (l.device_model) {
+                summaryText = (parsed.base || '') + (parsed.number || '');
+                summaryCls = 'text-slate-600';
+            } else {
+                summaryText = '비어있음';
+                summaryCls = 'text-slate-300';
+            }
+
+            return { n, isAdmin, isTarget, occupant, parsed, stateCls, statusBadge, isDimmed, summaryText, summaryCls };
+        }
+
         function renderLockerGrid() {
             const grid = document.getElementById('locker-grid');
             const banner = document.getElementById('locker-target-banner');
             const bannerText = document.getElementById('locker-target-text');
             if (!grid) return;
 
+            const targetItem = lockerAssignTargetRow ? allData.find(it => String(it.row) === String(lockerAssignTargetRow)) : null;
+            const targetModelBase = targetItem ? parseLockerDeviceModel(targetItem.model).base : '';
             if (lockerAssignTargetRow) {
-                const targetItem = allData.find(it => String(it.row) === String(lockerAssignTargetRow));
                 banner.classList.remove('hidden');
                 bannerText.innerText = targetItem ? `${targetItem.name}님(${targetItem.phone || '-'})을 배치할 보관함을 선택하세요` : '배치할 예약 정보를 찾을 수 없어요';
             } else {
                 banner.classList.add('hidden');
             }
 
-            grid.innerHTML = lockers.map(l => {
-                const n = l.locker_number;
-                const isAdmin = !!l.is_admin;
-                const isTarget = !!lockerAssignTargetRow && l.reservation_id != null && Number(l.reservation_id) === Number(lockerAssignTargetRow);
-                const occupant = l.reservation_id != null ? allData.find(it => Number(it.row) === Number(l.reservation_id)) : null;
-
-                let stateCls = 'border-slate-200 bg-white';
-                let statusBadge = '<span class="text-xs font-bold text-slate-300">비어있음</span>';
-                if (isTarget) {
-                    stateCls = 'border-emerald-300 bg-emerald-50';
-                    statusBadge = '<span class="text-xs font-black text-emerald-600">✓ 배치됨</span>';
-                } else if (l.reservation_id != null) {
-                    stateCls = 'border-amber-200 bg-amber-50';
-                    statusBadge = `<span class="text-xs font-bold text-amber-600 truncate">${escapeHtml(occupant ? occupant.name : '사용중')}</span>`;
+            // 세로 기준 3열 x 9행(총 27칸) 배치: 1열=1~9, 2열=10~18, 3열=19~27
+            // 기본 CSS 그리드는 가로(행) 우선으로 채우므로, [1,10,19, 2,11,20, ...] 순서로 재배열해서 넣습니다.
+            const LOCKER_COLS = 3, LOCKER_ROWS = 9;
+            const ordered = [];
+            for (let r = 0; r < LOCKER_ROWS; r++) {
+                for (let c = 0; c < LOCKER_COLS; c++) {
+                    const idx = c * LOCKER_ROWS + r;
+                    if (lockers[idx]) ordered.push(lockers[idx]);
                 }
-                if (isAdmin) {
-                    stateCls = 'border-rose-300 bg-rose-50';
-                    statusBadge = '<span class="text-xs font-black text-rose-600">관리자용(창고)</span>';
-                }
+            }
 
-                const adminToggleHtml = `
-                    <span class="absolute top-2.5 right-2.5 z-10 inline-flex items-center gap-1.5" onclick="event.stopPropagation()">
-                        <button type="button" onclick="updateLockerDevice(${n}, '')" title="선택한 대여모델과 배정번호를 초기화합니다"
-                            class="text-[10px] font-bold text-slate-400 bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5 active:bg-slate-200">초기화</button>
-                        <span class="text-[11px] font-bold ${isAdmin ? 'text-rose-500' : 'text-slate-400'}">관리자</span>
-                        <button type="button" onclick="toggleLockerAdmin(${n}, ${!isAdmin})" aria-pressed="${isAdmin}" title="켜면 이 보관함은 고객 배정에서 제외되고, 대여모델 칸에 자유롭게 텍스트를 입력할 수 있어요"
-                            class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${isAdmin ? 'bg-rose-400' : 'bg-slate-200'}">
-                            <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${isAdmin ? 'translate-x-4' : 'translate-x-0.5'}"></span>
-                        </button>
-                    </span>`;
-
-                let actionHtml = '';
-                if (lockerAssignTargetRow && !isTarget) {
-                    if (isAdmin) {
-                        actionHtml = `<div class="text-center text-[11px] font-bold text-rose-400 py-2">관리자 지정 보관함 (배정 불가)</div>`;
-                    } else {
-                        actionHtml = `<button onclick="assignLockerToReservation(${n})" class="w-full text-sm font-bold bg-indigo-600 active:bg-indigo-700 text-white py-2 rounded-lg">배치</button>`;
-                    }
-                } else if (l.reservation_id != null) {
-                    actionHtml = `<button onclick="unassignLocker(${n})" class="w-full text-sm font-bold bg-white active:bg-slate-50 text-slate-500 border border-slate-200 py-2 rounded-lg">비우기</button>`;
-                }
-
-                const parsed = parseLockerDeviceModel(l.device_model);
-                const modelButtonsHtml = MODEL_LIST.map(m => `
-                    <button onclick="event.stopPropagation(); setLockerModelBase(${n}, '${m}')" style="flex:1"
-                        class="text-sm font-black py-2 px-1 rounded ${parsed.base === m ? 'bg-indigo-600 text-white' : 'bg-white text-slate-500 border border-slate-200 active:bg-slate-50'}">${m}</button>
-                `).join('');
-
-                const modelSectionHtml = isAdmin ? `
-                    <input type="text" value="${escapeHtml(l.device_model || '')}" placeholder="보관 내용 입력 (예: 여분 배터리, 포장 박스 등)"
-                        onclick="event.stopPropagation()"
-                        onchange="updateLockerDevice(${n}, this.value)"
-                        class="w-full text-sm px-3 py-2 border border-rose-200 rounded-lg font-bold text-slate-700 outline-none focus:border-rose-400" />
-                    <div class="flex items-center gap-1.5">
-                        <input type="text" style="flex:1" value="${escapeHtml(l.password || '')}" placeholder="비밀번호"
-                            inputmode="numeric" maxlength="4"
-                            onclick="event.stopPropagation()"
-                            oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,4)"
-                            onchange="updateLockerPassword(${n}, this.value)"
-                            class="text-sm px-1 py-1.5 border border-slate-200 rounded-lg font-bold text-center text-slate-700 font-tnum outline-none focus:border-rose-400" />
-                        <button onclick="event.stopPropagation(); rerollLockerPassword(${n})" title="비밀번호 무작위로 다시 배정" style="width:32px;height:32px" class="shrink-0 flex items-center justify-center rounded-lg border border-slate-200 bg-white active:bg-slate-50 text-slate-500 text-sm">🔄</button>
-                    </div>
-                ` : `
-                    <div class="flex gap-1">${modelButtonsHtml}</div>
-                    <div class="flex items-center gap-1.5">
-                        <div id="locker-model-display-${n}" style="flex:1.3" onclick="event.stopPropagation(); enableLockerInlineEdit(${n})"
-                            class="bg-white text-slate-800 px-2 py-1.5 rounded-lg font-black text-sm border border-slate-300 cursor-pointer active:bg-blue-50 active:border-blue-400 transition-all truncate shadow-sm text-center">${escapeHtml((parsed.base || '') + (parsed.number || '') || '미선택')}</div>
-                        <input type="text" style="flex:0 0 64px;min-width:0" value="${escapeHtml(l.password || '')}" placeholder="비번"
-                            inputmode="numeric" maxlength="4"
-                            onclick="event.stopPropagation()"
-                            oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,4)"
-                            onchange="updateLockerPassword(${n}, this.value)"
-                            class="text-sm px-1 py-1.5 border border-slate-200 rounded-lg font-bold text-center text-slate-700 font-tnum outline-none focus:border-indigo-300" />
-                        <button onclick="event.stopPropagation(); rerollLockerPassword(${n})" title="비밀번호 무작위로 다시 배정" style="width:32px;height:32px" class="shrink-0 flex items-center justify-center rounded-lg border border-slate-200 bg-white active:bg-slate-50 text-slate-500 text-sm">🔄</button>
-                    </div>
-                `;
-
+            grid.innerHTML = ordered.map(l => {
+                const st = computeLockerState(l, targetModelBase);
                 return `
-                    <div class="relative border ${stateCls} rounded-xl p-3 flex flex-col gap-2 mb-2">
-                        ${adminToggleHtml}
-                        <div class="flex items-center gap-1" style="padding-right:132px">
-                            <span class="font-black text-sm text-slate-800">${n}번</span>
-                            ${statusBadge}
-                        </div>
-                        ${modelSectionHtml}
-                        ${actionHtml}
-                    </div>`;
+                    <button type="button" onclick="openLockerDetail(${st.n})"
+                        class="w-full border ${st.stateCls} rounded-lg py-2 px-1 flex flex-col items-center gap-0.5 overflow-hidden">
+                        <span class="font-black text-[14px] text-slate-800">${st.n}</span>
+                        <span class="text-[13px] font-bold ${st.summaryCls} truncate w-full text-center leading-tight">${escapeHtml(st.summaryText)}</span>
+                    </button>`;
             }).join('');
+        }
+
+        // 그리드에서 보관함을 탭했을 때 뜨는 상세 편집 바텀시트 내용을 채웁니다.
+        function renderLockerDetailSheet() {
+            const n = lockerDetailNumber;
+            const l = lockers.find(x => x.locker_number === n);
+            const title = document.getElementById('locker-detail-title');
+            const body = document.getElementById('locker-detail-body');
+            if (!l || !body) { closeLockerDetailSheet(); return; }
+
+            const targetItem = lockerAssignTargetRow ? allData.find(it => String(it.row) === String(lockerAssignTargetRow)) : null;
+            const targetModelBase = targetItem ? parseLockerDeviceModel(targetItem.model).base : '';
+            const { isAdmin, isTarget, statusBadge, parsed } = computeLockerState(l, targetModelBase);
+
+            if (title) title.innerHTML = `${n}번 보관함 <span class="ml-1">${statusBadge}</span>`;
+
+            let actionHtml = '';
+            if (lockerAssignTargetRow && !isTarget) {
+                if (isAdmin) {
+                    actionHtml = `<div class="text-center text-[12px] font-bold text-rose-400 py-2">관리자 지정 보관함 (배정 불가)</div>`;
+                } else {
+                    actionHtml = `<button onclick="assignLockerToReservation(${n})" class="w-full text-[14px] font-bold bg-indigo-600 active:bg-indigo-700 text-white py-3 rounded-lg mt-1">이 보관함에 배치</button>`;
+                }
+            } else if (l.reservation_id != null) {
+                actionHtml = `<button onclick="unassignLocker(${n})" class="w-full text-[14px] font-bold bg-white active:bg-slate-50 text-slate-500 border border-slate-300 py-3 rounded-lg mt-1">보관함 비우기</button>`;
+            }
+
+            const modelButtonsHtml = MODEL_LIST.map(m => `
+                <button type="button" onclick="setLockerModelBase(${n}, '${m}')" class="model-select-chip ${parsed.base === m ? 'active' : ''}">${m}</button>
+            `).join('');
+
+            const modelSectionHtml = isAdmin ? `
+                <div class="mb-4">
+                    <label class="input-label">보관 내용</label>
+                    <input type="text" value="${escapeHtml(l.device_model || '')}" placeholder="예: 여분 배터리, 포장 박스 등"
+                        onchange="updateLockerDevice(${n}, this.value)"
+                        class="input-field">
+                </div>
+            ` : `
+                <div class="mb-4">
+                    <label class="input-label mb-2">대여모델 선택</label>
+                    <div class="flex flex-wrap gap-2">${modelButtonsHtml}</div>
+                </div>
+                <div class="mb-4">
+                    <label class="input-label">배정번호</label>
+                    <input type="text" value="${escapeHtml(parsed.number)}" placeholder="예: 12"
+                        inputmode="numeric"
+                        oninput="this.value=this.value.replace(/[^0-9]/g,'')"
+                        onchange="setLockerModelNumber(${n}, this.value)"
+                        class="input-field font-tnum">
+                </div>
+            `;
+
+            body.innerHTML = `
+                <div class="form-section bg-white shadow-sm" style="margin-bottom:0">
+                    <div class="form-title" style="justify-content:space-between">
+                        <span>대여모델 및 배정</span>
+                        <span class="flex items-center gap-2 shrink-0" style="margin-left:auto">
+                            <button type="button" onclick="updateLockerDevice(${n}, '')" title="선택한 대여모델과 배정번호를 초기화합니다"
+                                class="text-[11px] font-bold text-slate-400 bg-white border border-slate-300 rounded-lg px-2 py-1 active:bg-slate-100">초기화</button>
+                            <span class="text-[12px] font-bold ${isAdmin ? 'text-rose-500' : 'text-slate-400'}">관리자</span>
+                            <button type="button" onclick="toggleLockerAdmin(${n}, ${!isAdmin})" aria-pressed="${isAdmin}" title="켜면 이 보관함은 고객 배정에서 제외되고, 대여모델 칸에 자유롭게 텍스트를 입력할 수 있어요"
+                                class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${isAdmin ? 'bg-rose-400' : 'bg-slate-200'}">
+                                <span class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${isAdmin ? 'translate-x-4' : 'translate-x-0.5'}"></span>
+                            </button>
+                        </span>
+                    </div>
+                    ${modelSectionHtml}
+                    <div>
+                        <label class="input-label">비밀번호</label>
+                        <div class="flex items-center gap-2">
+                            <input type="text" style="flex:1" value="${escapeHtml(l.password || '')}" placeholder="4자리 숫자"
+                                inputmode="numeric" maxlength="4"
+                                oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,4)"
+                                onchange="updateLockerPassword(${n}, this.value)"
+                                class="input-field font-tnum text-center">
+                            <button onclick="rerollLockerPassword(${n})" title="비밀번호 무작위로 다시 배정" style="width:44px;height:44px" class="shrink-0 flex items-center justify-center rounded-lg border border-slate-300 bg-white active:bg-slate-100 text-slate-500 text-base">🔄</button>
+                        </div>
+                    </div>
+                    ${actionHtml}
+                </div>`;
         }
 
         async function toggleLockerAdmin(lockerNumber, checked) {
@@ -1470,7 +1549,7 @@
             if (idx === -1) return;
             const prev = lockers[idx].is_admin;
             lockers[idx].is_admin = checked;
-            renderLockerGrid();
+            refreshLockerViews();
             try {
                 const { error } = await sb.from('storage_lockers').update({ is_admin: checked, updated_at: new Date().toISOString() }).eq('locker_number', lockerNumber);
                 if (error) throw error;
@@ -1478,7 +1557,7 @@
             } catch (e) {
                 lockers[idx].is_admin = prev;
                 showAppAlert('저장 실패: ' + (e.message || ''), '🚨 오류', '⚠️');
-                renderLockerGrid();
+                refreshLockerViews();
             }
         }
 
@@ -1506,61 +1585,10 @@
             const num = String(value || '').replace(/[^0-9]/g, '');
             if (!base) {
                 showToast('먼저 대여모델을 선택해주세요');
-                renderLockerGrid();
+                refreshLockerViews();
                 return;
             }
             updateLockerDevice(lockerNumber, base + num);
-        }
-
-        // 홈화면 리스트의 기기번호 인라인 편집(enableInlineEdit)과 동일한 형태/크기로 배정숫자를 편집합니다.
-        function enableLockerInlineEdit(lockerNumber) {
-            if (lockerInlineEditNumber === lockerNumber) return;
-            const locker = lockers.find(l => l.locker_number === lockerNumber);
-            if (!locker) return;
-            const container = document.getElementById(`locker-model-display-${lockerNumber}`);
-            if (!container) return;
-
-            const parsed = parseLockerDeviceModel(locker.device_model);
-            lockerInlineEditNumber = lockerNumber;
-
-            const prefixHtml = parsed.base ? `<span class="bg-blue-50 text-blue-600 px-2 py-1.5 rounded-l-lg border-y border-l border-blue-500 font-black text-[13px] shrink-0">${parsed.base}</span>` : '';
-            const inputClass = parsed.base ? 'rounded-r-lg border-y border-r' : 'rounded-lg border-2';
-
-            container.outerHTML = `
-                <div id="locker-model-display-${lockerNumber}" style="flex:1.3" class="flex items-center shadow-sm">
-                    ${prefixHtml}
-                    <input type="text" id="locker-inline-input-${lockerNumber}" inputmode="numeric"
-                        class="w-full px-2 py-1.5 text-[14px] font-black ${inputClass} border-blue-500 outline-none font-tnum bg-white text-slate-900 text-center min-w-[30px]"
-                        value="${escapeHtml(parsed.number)}" placeholder="번호"
-                        onclick="event.stopPropagation()"
-                        oninput="this.value=this.value.replace(/[^0-9]/g,'')">
-                </div>`;
-
-            const input = document.getElementById(`locker-inline-input-${lockerNumber}`);
-            input.focus();
-            input.selectionStart = input.selectionEnd = input.value.length;
-
-            let isSaved = false;
-            const save = () => {
-                if (isSaved) return;
-                isSaved = true;
-                lockerInlineEditNumber = null;
-                setLockerModelNumber(lockerNumber, input.value);
-            };
-
-            input.addEventListener('keydown', (event) => {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    input.blur();
-                } else if (event.key === 'Escape') {
-                    event.preventDefault();
-                    isSaved = true;
-                    lockerInlineEditNumber = null;
-                    renderLockerGrid();
-                }
-            });
-
-            input.addEventListener('blur', save);
         }
 
         async function updateLockerDevice(lockerNumber, value) {
@@ -1569,7 +1597,7 @@
             if (idx === -1) return;
             const prev = lockers[idx].device_model;
             lockers[idx].device_model = device || null;
-            renderLockerGrid();
+            refreshLockerViews();
             try {
                 const { error } = await sb.from('storage_lockers').update({ device_model: device || null, updated_at: new Date().toISOString() }).eq('locker_number', lockerNumber);
                 if (error) throw error;
@@ -1577,7 +1605,7 @@
             } catch (e) {
                 lockers[idx].device_model = prev;
                 showAppAlert('저장 실패: ' + (e.message || ''), '🚨 오류', '⚠️');
-                renderLockerGrid();
+                refreshLockerViews();
             }
         }
 
@@ -1585,14 +1613,14 @@
             const pw = String(value || '').replace(/[^0-9]/g, '').slice(0, 4);
             if (pw && pw.length !== 4) {
                 showToast('비밀번호는 숫자 4자리로 입력해주세요');
-                renderLockerGrid();
+                refreshLockerViews();
                 return;
             }
             const idx = lockers.findIndex(l => l.locker_number === lockerNumber);
             if (idx === -1) return;
             const prev = lockers[idx].password;
             lockers[idx].password = pw || null;
-            renderLockerGrid();
+            refreshLockerViews();
             try {
                 const { error } = await sb.from('storage_lockers').update({ password: pw || null, updated_at: new Date().toISOString() }).eq('locker_number', lockerNumber);
                 if (error) throw error;
@@ -1600,7 +1628,7 @@
             } catch (e) {
                 lockers[idx].password = prev;
                 showAppAlert('저장 실패: ' + (e.message || ''), '🚨 오류', '⚠️');
-                renderLockerGrid();
+                refreshLockerViews();
             }
         }
 
@@ -1651,6 +1679,7 @@
                     locker.assigned_at = nowIso;
 
                     lockerAssignTargetRow = null;
+                    closeLockerDetailSheet();
                     renderLockerGrid();
                     showToast(`${lockerNumber}번 보관함에 배치했어요`);
 
@@ -1701,6 +1730,7 @@
                         await sb.from('reservations').update({ locker_number: null }).eq('id', Number(occupantRow));
                         filterData(true);
                     }
+                    closeLockerDetailSheet();
                     renderLockerGrid();
                     showToast('보관함을 비웠어요');
                 } catch (e) {
@@ -7104,7 +7134,21 @@
                     </div>
                 </div>
             </div>
-            <div id="locker-grid" class="flex-1 overflow-y-auto" style="padding: 12px calc(12px) calc(28px + env(safe-area-inset-bottom,0px));"></div>
+            <div id="locker-grid" class="flex-1 overflow-y-auto grid grid-cols-3 gap-1.5 items-start" style="padding: 12px calc(12px) calc(28px + env(safe-area-inset-bottom,0px));"></div>
+        </div>
+
+        <!-- 보관함 탭 시 뜨는 상세 편집 바텀시트 -->
+        <div id="locker-detail-sheet-root" class="hidden fixed inset-0 z-[125] flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-slate-900/50" onclick="closeLockerDetailSheet()"></div>
+            <div class="relative bg-white rounded-2xl shadow-2xl flex flex-col w-full max-w-sm" style="max-height: 82vh;">
+                <div class="flex items-center gap-2 px-4 pt-4 pb-3 border-b border-slate-100 shrink-0">
+                    <div id="locker-detail-title" class="flex-1 text-[15px] font-black text-slate-900 min-w-0">보관함</div>
+                    <button onclick="closeLockerDetailSheet()" class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 text-slate-600 shrink-0">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </button>
+                </div>
+                <div id="locker-detail-body" class="overflow-y-auto p-4" style="padding-bottom: 20px;"></div>
+            </div>
         </div>
     </div>
 
