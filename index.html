@@ -468,6 +468,18 @@
                 </button>
             </div>
 
+            <!-- [NEW] 재고 부족 임박 (재고 5대 이하) -->
+            <div id="low-stock-section" class="hidden bg-rose-50 p-4 rounded-2xl shadow-sm border border-rose-200">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="flex flex-col gap-1.5">
+                        <h3 class="text-[15px] font-black text-rose-900 flex items-center gap-1.5">
+                            <span class="text-base">⚠️</span> 재고 부족 임박
+                        </h3>
+                    </div>
+                </div>
+                <div id="low-stock-list" class="space-y-1.5"></div>
+            </div>
+
             <!-- 신규 예약 필터 -->
             <div class="bg-emerald-50 p-4 rounded-2xl shadow-sm border border-emerald-200">
                 <div class="flex justify-between items-start mb-3">
@@ -1739,6 +1751,57 @@
             }, '보관함 비우기', '비우기', 'bg-slate-800', '🗄️');
         }
 
+        // [NEW] 예약이 '반납완료'로 바뀌면, 배정되어 있던 물품보관함의 고객정보(예약 연결)와 대여모델 정보까지 자동으로 비웁니다.
+        async function releaseLockerOnReturn(rowId, lockerNumber) {
+            if (!lockerNumber) return;
+            try {
+                const nowIso = new Date().toISOString();
+                await sb.from('storage_lockers').update({ reservation_id: null, assigned_at: null, device_model: null, updated_at: nowIso }).eq('locker_number', lockerNumber);
+                await sb.from('reservations').update({ locker_number: null }).eq('id', Number(rowId));
+                const l = lockers.find(x => x.locker_number === lockerNumber);
+                if (l) { l.reservation_id = null; l.assigned_at = null; l.device_model = null; }
+                if (lockers.length) refreshLockerViews();
+            } catch (e) {
+                console.error('반납 처리에 따른 보관함 비우기 실패:', e);
+            }
+        }
+
+        // 예약의 review 필드(카카오맵/블로그/트위터/홈페이지/선택안함) 값으로 리뷰 요청 알림톡 templateKey를 고른다. 매칭 안 되면 null.
+        function reviewTemplateKeyFor(reviewType) {
+            const r = String(reviewType || '');
+            if (r.includes('카카오맵')) return 'review_kakaomap';
+            if (r.includes('블로그')) return 'review_blog';
+            if (r.includes('트위터')) return 'review_twitter';
+            if (r.includes('홈페이지')) return 'review_homepage';
+            if (r.includes('선택안함')) return 'review_none';
+            return null;
+        }
+
+        // 배송 시작 안내 알림톡(배송조회 버튼 포함) — 송장번호를 입력하는 4곳(수정창/인라인편집/엑셀매칭/엑셀일괄배정) 전부 이걸로 통일해서 호출
+        function sendDeliveryStartAlimtalk(phone, name, model, tracking) {
+            const trackingUrl = `https://m.epost.go.kr/postal/mobile/mobile.trace.RetrieveDomRigiTraceList.comm?sid1=${encodeURIComponent(tracking)}`;
+            sendAdminAlimtalk('delivery', phone, {
+                '#{이름}': name || '',
+                '#{모델}': model || '',
+                '#{송장번호}': tracking
+            }, [{ buttonType: 'WL', buttonName: '배송조회', linkMo: trackingUrl, linkPc: trackingUrl }]);
+        }
+
+        // 상태/송장/메모 변경 시 발송하는 알림톡 공용 헬퍼(베스트에포트 — 실패해도 저장 자체는 이미 완료된 상태로 둠, 콘솔에만 에러 남김)
+        async function sendAdminAlimtalk(templateKey, phone, variables, buttons) {
+            if (!phone) return;
+            try {
+                const { data, error } = await sb.functions.invoke('send-alimtalk', {
+                    body: { templateKey, phone, variables, buttons }
+                });
+                if (error) { console.error(templateKey + ' 알림톡 발송 실패', error); return; }
+                if (data && data.error) { console.error(templateKey + ' 알림톡 발송 실패', data.error); return; }
+                if (data && data.success === false) { console.error(templateKey + ' 알림톡 발송 실패', data.results || data); }
+            } catch (e) {
+                console.error(templateKey + ' 알림톡 발송 중 오류', e);
+            }
+        }
+
         async function sendLockerAlimtalk(phone, name, lockerNumber, password) {
             if (!phone) {
                 showAppAlert(`보관함 배치는 완료됐지만, 이 예약에 연락처가 없어서 알림톡을 보내지 못했어요.${password ? `\n(보관함 비밀번호: ${password})` : ''}`, '⚠️ 알림톡 미발송', '⚠️');
@@ -1933,6 +1996,7 @@
         }
 
         function isWithinReturnBusinessDays(dateStr, maxDays) {
+            dateStr = toDash(dateStr); // endDate가 "2026-08-24" / "2026. 8. 24" 두 형식으로 섞여 있어서 통일 후 비교
             if (!dateStr || !dateStr.includes('-')) return false;
             const parts = dateStr.split('-');
             if (parts.length !== 3) return false;
@@ -1975,6 +2039,7 @@
 
         let currentServiceFilter = null;
         let serviceFilterAutoOff = false; // [NEW] 신청·대기중 0건이라 시스템이 자동으로 필터를 끈 상태인지 (사용자가 직접 끈 것과 구분)
+        let activeLowStockFilter = null; // [NEW] 재고 부족 임박 항목 클릭 시 { model, start, end } — 그 기간에 재고를 차지하는 예약만 표시
 
         let currentCalDate = new Date();
         let tempSelectedDates = [];
@@ -2144,6 +2209,30 @@
             Gyeonggi: ["고양 종합운동장", "킨텍스"]
         };
         const SETTINGS_REGION_LABEL = { Seoul: "서울", Incheon: "인천", Gyeonggi: "경기" };
+
+        // [NEW] '이번주 예약 인원 > 공연장' 필터를 공연장별로 보기 위한 매칭 헬퍼
+        // 등록된 공연장 이름(지역별 기본 목록 + 설정에서 추가한 공연장)을 배송지 주소에 포함되어 있는지로 매칭합니다.
+        function getKnownVenueNames() {
+            const base = Object.values(SETTINGS_VENUE_REGIONS).flat();
+            const customSource = (settingsDraft && settingsDraft.venue_custom) || (adminSettings && adminSettings.venue_custom) || [];
+            const custom = customSource.map(v => v.name).filter(Boolean);
+            // 이름이 긴 것부터 검사해야 서로 겹치는 이름에서 더 구체적인 쪽이 먼저 매칭됩니다.
+            return [...new Set([...base, ...custom])].sort((a, b) => b.length - a.length);
+        }
+        function matchVenueName(address) {
+            const addr = String(address || '');
+            if (!addr) return null;
+            const names = getKnownVenueNames();
+            for (const name of names) {
+                if (name && addr.includes(name)) return name;
+            }
+            return null;
+        }
+        const VENUE_UNKNOWN_GROUP = '확인 필요'; // 등록된 공연장 이름과 매칭 안 되는 주소(신규 공연장 등)를 묶는 그룹명
+        // 등록된 공연장으로 매칭되면 그 이름을, 안 되면(신규 공연장 등) "확인 필요" 그룹으로 묶습니다.
+        function resolveVenueGroup(address) {
+            return matchVenueName(address) || VENUE_UNKNOWN_GROUP;
+        }
         const SETTINGS_DELIVERY_METHODS = [
             { key: "post", label: "택배 수령" },
             { key: "quick", label: "퀵 수령" },
@@ -2168,6 +2257,266 @@
         function settingsDateKey(y, m, d) { return `${y}-${m}-${d}`; }
         function cloneSettings(obj) { return JSON.parse(JSON.stringify(obj || {})); }
 
+        // ===== [NEW] 재고 관리 : 모델별 보유 대수 + 예약 현황으로 날짜별 대여 가능 대수 계산 =====
+        // 17PM을 17P보다 먼저 검사해야 "17PM12" 같은 문자열이 17P로 잘못 분류되지 않습니다.
+        const STOCK_MODEL_ORDER = ['23U', '24U', '25U', '26U', '17PM', '17P'];
+        const DEFAULT_STOCK_PER_MODEL = 20;
+        let inventoryCursorDate = new Date(); // 재고표에서 보여주는 기간의 시작일
+
+        function getStockCounts() {
+            const saved = (settingsDraft && settingsDraft.stock_counts) || {};
+            const counts = {};
+            MODEL_LIST.forEach(m => {
+                const v = Number(saved[m]);
+                counts[m] = Number.isFinite(v) ? v : DEFAULT_STOCK_PER_MODEL;
+            });
+            return counts;
+        }
+        function setStockCount(model, value) {
+            const current = getStockCounts();
+            current[model] = Math.max(0, parseInt(value, 10) || 0);
+            setDraft('stock_counts', current);
+        }
+        function getModelBucket(modelStr) {
+            const m = String(modelStr || '').toUpperCase();
+            for (const model of STOCK_MODEL_ORDER) {
+                if (m.includes(model)) return model;
+            }
+            return null;
+        }
+        function parseDateKeyToDate(s) {
+            const parts = String(s || '').split('-');
+            if (parts.length !== 3) return null;
+            const y = parseInt(parts[0], 10), mo = parseInt(parts[1], 10), d = parseInt(parts[2], 10);
+            if (!y || !mo || !d) return null;
+            return new Date(y, mo - 1, d);
+        }
+        // 예약 1건이 실제로 "재고에서 빠져 있는" 기간(수령~반납)을 계산합니다.
+        // - 택배/퀵 수령: 하루 전에 미리 보내야 수령일에 맞출 수 있으므로 수령일 하루 전부터 재고 제외
+        // - 사무실/공연장 수령: 선택한 날짜에 바로 수령하므로 그날부터 제외
+        // - 반납은 방법과 무관하게 반납일까지 재고 제외 (당일반납은 반납일 다음날부터, 택배반납은 실제 도착이 반납일 다음날이라 자연히 맞음)
+        function getOccupiedRange(item) {
+            const start = parseDateKeyToDate(item.startDate);
+            const end = parseDateKeyToDate(item.endDate);
+            if (!start || !end) return null;
+            const delivery = String(item.delivery || '');
+            const needsLeadDay = delivery.includes('택배') || delivery.includes('퀵');
+            const occStart = new Date(start);
+            if (needsLeadDay) occStart.setDate(occStart.getDate() - 1);
+            return { start: occStart, end };
+        }
+        // 재고 계산 대상: 상태가 예약신청/확정/대기인 "원예약"만 (연장·백업·변경·취소·주소변경 신청건은 원예약 날짜에 이미 반영되므로 제외)
+        function getInventoryOccupancy() {
+            const countedStatuses = ['예약신청', '확정', '대기'];
+            const requestCategories = ['연장신청', '백업신청', '변경신청', '취소신청', '주소변경신청'];
+            const byModel = {};
+            MODEL_LIST.forEach(m => byModel[m] = []);
+            allData.forEach(item => {
+                if (!countedStatuses.includes(String(item.status || ''))) return;
+                if (requestCategories.includes(String(item.category || ''))) return;
+                const bucket = getModelBucket(item.model);
+                if (!bucket) return;
+                const range = getOccupiedRange(item);
+                if (!range) return;
+                byModel[bucket].push(range);
+            });
+            return byModel;
+        }
+        function shiftInventoryRange(days) {
+            inventoryCursorDate.setDate(inventoryCursorDate.getDate() + days);
+            renderInventoryTable();
+        }
+        function resetInventoryRange() {
+            inventoryCursorDate = new Date();
+            renderInventoryTable();
+        }
+        function renderStockInputs() {
+            const wrap = document.getElementById('stock-count-inputs');
+            if (!wrap) return;
+            const stock = getStockCounts();
+            wrap.innerHTML = MODEL_LIST.map(m => `
+                <div class="flex flex-col gap-1">
+                    <label class="text-[11px] font-bold text-slate-400 text-center">${m}</label>
+                    <input type="number" min="0" value="${stock[m]}" onchange="setStockCount('${m}', this.value)" class="h-10 rounded-lg border border-slate-200 text-center font-bold text-slate-800 text-sm outline-none focus:border-indigo-400">
+                </div>
+            `).join('');
+        }
+        function renderInventoryTable() {
+            const wrap = document.getElementById('inventory-table-wrap');
+            if (!wrap) return;
+
+            const stock = getStockCounts();
+            const occupancy = getInventoryOccupancy();
+            const dayCount = 7;
+            const start = new Date(inventoryCursorDate); start.setHours(0, 0, 0, 0);
+
+            const days = [];
+            for (let i = 0; i < dayCount; i++) {
+                const d = new Date(start); d.setDate(d.getDate() + i);
+                days.push(d);
+            }
+
+            const weekdayLabels = ['일', '월', '화', '수', '목', '금', '토'];
+            const todayKey = new Date(); todayKey.setHours(0, 0, 0, 0);
+
+            const theadHtml = `<th class="text-left px-2.5 py-1.5 sticky left-0 bg-slate-50 z-10">날짜</th>` +
+                MODEL_LIST.map(m => `<th class="px-2.5 py-1.5 text-center whitespace-nowrap">${m}</th>`).join('');
+
+            const rowsHtml = days.map(d => {
+                const wd = weekdayLabels[d.getDay()];
+                const wdCls = d.getDay() === 0 ? 'text-rose-500' : (d.getDay() === 6 ? 'text-blue-500' : 'text-slate-600');
+                const dLabel = `${d.getMonth() + 1}/${d.getDate()}(${wd})`;
+                const isToday = d.getTime() === todayKey.getTime();
+                const rowBg = isToday ? 'bg-indigo-50/60' : 'bg-white';
+
+                const cells = MODEL_LIST.map(m => {
+                    const total = stock[m];
+                    const used = occupancy[m].filter(r => d >= r.start && d <= r.end).length;
+                    const avail = total - used;
+                    let cls = 'text-emerald-700';
+                    if (avail <= 0) cls = 'text-rose-600 font-black';
+                    else if (avail <= 3) cls = 'text-amber-600 font-bold';
+                    return `<td class="px-2.5 py-1.5 text-center font-tnum font-bold ${cls}">${avail}<span class="text-slate-300 font-normal">/${total}</span></td>`;
+                }).join('');
+
+                return `<tr class="border-t border-slate-100 ${rowBg}">
+                    <td class="px-2.5 py-1.5 font-bold sticky left-0 ${rowBg} ${wdCls} whitespace-nowrap">${dLabel}${isToday ? ' <span class="text-indigo-500 text-[10px]">오늘</span>' : ''}</td>
+                    ${cells}
+                </tr>`;
+            }).join('');
+
+            wrap.innerHTML = `<table class="w-full text-[12.5px] border-collapse min-w-[420px]">
+                <thead><tr class="bg-slate-50 border-b border-slate-200">${theadHtml}</tr></thead>
+                <tbody>${rowsHtml}</tbody>
+            </table>`;
+
+            const rangeLabel = document.getElementById('inventory-range-label');
+            if (rangeLabel) {
+                const last = days[days.length - 1];
+                rangeLabel.innerText = `${start.getMonth() + 1}/${start.getDate()} ~ ${last.getMonth() + 1}/${last.getDate()}`;
+            }
+        }
+
+        // ===== [NEW] 재고 부족 임박 알림 (사이드바, '신규 예약' 위) =====
+        const LOW_STOCK_THRESHOLD = 2;        // 보유수량이 넉넉한 모델은 잔여 2대 이하일 때만 표시
+        const LOW_STOCK_THRESHOLD_TIGHT = 0;  // 보유수량 자체가 적은(5대 이하) 모델은 잔여 0대(품절) 이하일 때만 표시
+        const LOW_STOCK_TIGHT_STOCK_MAX = 5;  // 이 대수 이하 보유량이면 "보유수량 적음"으로 간주
+        const LOW_STOCK_LOOKAHEAD_DAYS = 30; // 오늘부터 며칠 앞까지 스캔할지
+        function fmtMonthDay(d) { return `${d.getMonth() + 1}/${d.getDate()}`; }
+        // 모델별로 날짜를 하루씩 스캔하면서, 기준치 이하로 부족한 날이 연속되면 하나의 구간으로 묶습니다.
+        // (예약이 시작/종료되면서 날마다 남은 대수 자체는 조금씩 달라질 수 있으므로, 값이 정확히 같아야만 묶지 않고
+        //  "연속으로 부족한지"만 보고 묶은 뒤 그 구간에서 가장 적었던 대수(최소값)를 대표값으로 보여줍니다.)
+        // (연속 2일 이상이면 날짜를 "9/5~9/7"처럼 물결표시로, 하루뿐이면 날짜 하나만 표시)
+        function getLowStockAlerts() {
+            const stock = getStockCounts();
+            const occupancy = getInventoryOccupancy();
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+
+            const alerts = [];
+            MODEL_LIST.forEach(model => {
+                const total = stock[model];
+                const threshold = total <= LOW_STOCK_TIGHT_STOCK_MAX ? LOW_STOCK_THRESHOLD_TIGHT : LOW_STOCK_THRESHOLD;
+                let run = null; // { model, remaining(최소값), start, end }
+                for (let i = 0; i < LOW_STOCK_LOOKAHEAD_DAYS; i++) {
+                    const d = new Date(today); d.setDate(d.getDate() + i);
+                    const used = occupancy[model].filter(r => d >= r.start && d <= r.end).length;
+                    const remaining = total - used;
+                    if (remaining <= threshold) {
+                        if (run) {
+                            run.end = d;
+                            run.remaining = Math.min(run.remaining, remaining);
+                        } else {
+                            run = { model, remaining, start: d, end: d };
+                        }
+                    } else if (run) {
+                        alerts.push(run);
+                        run = null;
+                    }
+                }
+                if (run) alerts.push(run);
+            });
+
+            alerts.sort((a, b) => a.start - b.start || a.model.localeCompare(b.model));
+            return alerts;
+        }
+        function renderLowStockAlerts() {
+            const section = document.getElementById('low-stock-section');
+            const list = document.getElementById('low-stock-list');
+            if (!section || !list) return;
+
+            const alerts = getLowStockAlerts();
+            if (alerts.length === 0) {
+                section.classList.add('hidden');
+                list.innerHTML = '';
+                return;
+            }
+            section.classList.remove('hidden');
+
+            list.innerHTML = alerts.map(a => {
+                const dateLabel = a.start.getTime() === a.end.getTime()
+                    ? fmtMonthDay(a.start)
+                    : `${fmtMonthDay(a.start)}~${fmtMonthDay(a.end)}`;
+                // [FIX] Tailwind 클래스명(bg-rose-700 등)이 이 프로젝트의 사전 빌드 CSS에 없으면 배경이 그냥 흰색이 되어
+                // 흰 글씨가 안 보이는 문제가 있었습니다. 그래서 클래스 대신 인라인 style로 색을 직접 지정합니다.
+                let badgeText, badgeColor;
+                if (a.remaining < 0) { badgeText = `잔여 ${a.remaining}대`; badgeColor = '#9F1239'; }      // 진한 적갈색 (초과예약)
+                else if (a.remaining === 0) { badgeText = '품절'; badgeColor = '#DC2626'; }                  // 빨강 (품절)
+                else { badgeText = `잔여 ${a.remaining}대`; badgeColor = '#2563EB'; }                        // 파랑 (부족 임박)
+
+                const startKey = fmtDateKey(a.start), endKey = fmtDateKey(a.end);
+                const isActive = activeLowStockFilter && activeLowStockFilter.model === a.model &&
+                    activeLowStockFilter.start.getTime() === a.start.getTime() && activeLowStockFilter.end.getTime() === a.end.getTime();
+                const ringCls = isActive ? 'ring-2 ring-indigo-500 border-indigo-300' : 'border-rose-100';
+
+                // [NEW] 클릭하면 이 기간에 해당 모델 재고를 차지하고 있는 예약만 메인 목록에 필터링해서 보여줌
+                return `<button type="button" onclick="filterByLowStock('${a.model}', '${startKey}', '${endKey}')" class="w-full flex items-center justify-between gap-2 bg-white border ${ringCls} rounded-xl px-3 py-2.5 shadow-sm active:bg-rose-50 transition-colors text-left">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <span class="text-[11px] font-black text-slate-500 font-tnum shrink-0">${dateLabel}</span>
+                        <span class="text-[13px] font-black text-slate-800 shrink-0">${a.model}</span>
+                    </div>
+                    <span class="text-[11px] font-black text-white px-2 py-1 rounded-lg shrink-0 whitespace-nowrap" style="background-color:${badgeColor}">${badgeText}</span>
+                </button>`;
+            }).join('');
+        }
+        function fmtDateKey(d) { return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; }
+        // [NEW] 재고 부족 임박 항목 클릭: 다른 필터를 모두 초기화하고 그 기간에 해당 모델 재고를 차지한 예약만 표시
+        function filterByLowStock(model, startKey, endKey) {
+            const start = parseDateKeyToDate(startKey);
+            const end = parseDateKeyToDate(endKey);
+            if (!start || !end) return;
+
+            activeLowStockFilter = { model, start, end };
+            serviceFilterAutoOff = false;
+            currentServiceFilter = null;
+            selectedUpcomingFilters = [];
+            isViewAllUpcoming = false;
+            selectedReturnUpcomingFilters = [];
+            isViewAllReturnUpcoming = false;
+            currentFilterStatus = 'all';
+            currentModelFilter = 'all';
+            currentDeliveryFilter = 'all';
+            currentDeliverySubFilter = 'all';
+            currentReturnFilter = 'all';
+            selectedDates = [];
+            selectedReturnDates = [];
+            document.getElementById('search-input').value = '';
+
+            document.querySelectorAll('.chip-btn').forEach(btn => {
+                if (btn.dataset.id === 'all') btn.classList.add('active');
+                else btn.classList.remove('active');
+            });
+            document.querySelectorAll('.upc-header, .upc-item, .ret-upc-header, .ret-upc-item, .svc-header').forEach(btn => btn.classList.remove('active'));
+
+            filterData(false);
+
+            const dateLabel = start.getTime() === end.getTime() ? fmtMonthDay(start) : `${fmtMonthDay(start)}~${fmtMonthDay(end)}`;
+            showToast(`${model} · ${dateLabel} 재고를 차지하는 예약 ${currentlyFilteredList.length}건`);
+        }
+        function clearLowStockFilter() {
+            activeLowStockFilter = null;
+            filterData(false);
+        }
+
         async function loadAdminSettings() {
             try {
                 const { data, error } = await sb.from('admin_settings').select('*');
@@ -2178,6 +2527,7 @@
                 settingsDraft = cloneSettings(map);
                 settingsLoaded = true;
                 markSettingsDirty(false);
+                renderLowStockAlerts();
             } catch (e) {
                 showToast('설정 로드 실패: ' + (e.message || '') + ' (admin_settings 테이블 확인)');
             }
@@ -2192,6 +2542,9 @@
             renderVenueCustomList();
             renderConcertVenuePicker();
             renderConcertList();
+            renderStockInputs();
+            renderInventoryTable();
+            renderLowStockAlerts();
         }
 
         function markSettingsDirty(isDirty) {
@@ -2261,6 +2614,9 @@
             renderVenueCustomList();
             renderConcertVenuePicker();
             renderConcertList();
+            inventoryCursorDate = new Date();
+            renderStockInputs();
+            renderInventoryTable();
         }
         function closeSettings() {
             if (settingsDirty) {
@@ -2285,6 +2641,8 @@
                 renderVenueCustomList();
                 renderConcertVenuePicker();
                 renderConcertList();
+                renderStockInputs();
+                renderInventoryTable();
                 if (settingsPickedKey && settingsCategory) renderSettingsSheetBody();
                 showToast('설정을 새로 불러왔어요');
             };
@@ -2791,6 +3149,7 @@
         }
 
         function resetAllFilters() {
+            activeLowStockFilter = null;
             serviceFilterAutoOff = false;
             currentFilterStatus = 'all';
             currentModelFilter = 'all';
@@ -2864,6 +3223,11 @@
             
             let html = '';
             methods.forEach(m => {
+                // [NEW] 공연장은 고정된 블록 1개 대신, 배송지 주소로 매칭한 공연장별로 블록을 동적으로 만듭니다 (renderVenueGroups 참고)
+                if (m.id === '공연장') {
+                    html += `<div id="upc-venue-groups-container" class="space-y-2"></div>`;
+                    return;
+                }
                 html += `
                 <div id="block-upc-${m.id}" class="bg-white border border-indigo-100 rounded-xl overflow-hidden shadow-sm mb-2" style="display:none;">
                     <button onclick="setUpcomingFilter('${m.id}', 'all')" class="w-full bg-slate-50 hover:bg-indigo-50 p-2.5 flex justify-between items-center transition-colors upc-header border-b border-indigo-50" data-del="${m.id}">
@@ -2873,12 +3237,55 @@
                         </div>
                     </button>
                     <div class="p-3 flex flex-wrap gap-2 bg-white" id="upc-items-${m.id}">
-                        ${m.id === '공연장' ? '' : MODEL_LIST.map(model => `
-                            <button onclick="setUpcomingFilter('${m.id}', '${model}')" class="chip-btn upc-item" data-del="${m.id}" data-mod="${model}" style="display:none;">
-                                ${model} (<span id="count-upc-${m.id}-${model}">0</span>)
-                            </button>
-                        `).join('')}
                     </div>
+                </div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        // [NEW] '이번주 예약 인원 > 공연장'을 공연장별 블록으로 렌더링. 각 블록 제목이 공연장 이름이고,
+        // 그 안의 버튼은 (기존과 동일하게) 날짜별입니다. 등록된 이름과 매칭 안 되는 주소는 "확인 필요" 블록으로 모아
+        // 신규 공연장이 생겼을 때 놓치지 않고 알아볼 수 있게 합니다.
+        function renderVenueGroups(venueGroups) {
+            const container = document.getElementById('upc-venue-groups-container');
+            if (!container) return;
+
+            const venueNames = Object.keys(venueGroups || {});
+            const known = venueNames.filter(v => v !== VENUE_UNKNOWN_GROUP).sort((a, b) => venueGroups[b].all - venueGroups[a].all);
+            const unknown = venueNames.filter(v => v === VENUE_UNKNOWN_GROUP);
+            const ordered = [...known, ...unknown]; // 확인 필요는 항상 맨 아래
+
+            let html = '';
+            ordered.forEach(venueName => {
+                const group = venueGroups[venueName];
+                const isUnknown = venueName === VENUE_UNKNOWN_GROUP;
+                const safeVenue = venueName.replace(/'/g, "\\'");
+                const isHeaderActive = selectedUpcomingFilters.some(f => f.method === '공연장' && f.value === 'venue:' + venueName) ? 'active' : '';
+
+                const sortedDates = Object.keys(group.dates).sort((a, b) => {
+                    if (a === '미정') return 1;
+                    if (b === '미정') return -1;
+                    const [m1, rest1] = a.split('/');
+                    const [m2, rest2] = b.split('/');
+                    if (parseInt(m1) !== parseInt(m2)) return parseInt(m1) - parseInt(m2);
+                    return parseInt(rest1) - parseInt(rest2);
+                });
+
+                const itemsHtml = sortedDates.map(d => {
+                    const count = group.dates[d];
+                    const isActive = selectedUpcomingFilters.some(f => f.method === '공연장' && f.value === `venuedate:${venueName}|${d}`) ? 'active' : '';
+                    return `<button onclick="setUpcomingFilter('공연장', 'venuedate:${safeVenue}|${d}')" class="chip-btn upc-item ${isActive}" data-del="공연장" data-mod="venuedate:${venueName}|${d}">
+                        ${d} ${count}건
+                    </button>`;
+                }).join('');
+
+                html += `
+                <div class="bg-white border ${isUnknown ? 'border-amber-200' : 'border-indigo-100'} rounded-xl overflow-hidden shadow-sm mb-2">
+                    <button onclick="setUpcomingFilter('공연장', 'venue:${safeVenue}')" class="w-full ${isUnknown ? 'bg-amber-50 hover:bg-amber-100' : 'bg-slate-50 hover:bg-indigo-50'} p-2.5 flex justify-between items-center transition-colors upc-header border-b ${isUnknown ? 'border-amber-100' : 'border-indigo-50'} ${isHeaderActive}" data-del="공연장" data-mod="venue:${venueName}">
+                        <span class="font-bold text-[13px] ${isUnknown ? 'text-amber-700' : 'text-slate-700'} upc-title">${isUnknown ? '⚠️' : '🏟️'} ${escapeHtml(venueName)} 전체보기</span>
+                        <span class="text-xs font-bold ${isUnknown ? 'text-amber-600' : 'text-slate-500'} upc-count">${group.all}건</span>
+                    </button>
+                    <div class="p-3 flex flex-wrap gap-2 bg-white">${itemsHtml}</div>
                 </div>`;
             });
             container.innerHTML = html;
@@ -2945,6 +3352,7 @@
         }
 
         function viewAllUpcoming() {
+            activeLowStockFilter = null;
             serviceFilterAutoOff = false;
             if (isViewAllUpcoming) {
                 isViewAllUpcoming = false;
@@ -2993,6 +3401,7 @@
         }
 
         function viewAllReturnUpcoming() {
+            activeLowStockFilter = null;
             serviceFilterAutoOff = false;
             if (isViewAllReturnUpcoming) {
                 isViewAllReturnUpcoming = false;
@@ -3041,6 +3450,7 @@
         }
 
         function setUpcomingFilter(del, mod) {
+            activeLowStockFilter = null;
             serviceFilterAutoOff = false;
             isViewAllUpcoming = false;
             
@@ -3103,6 +3513,7 @@
         }
 
         function setReturnUpcomingFilter(ret, mod) {
+            activeLowStockFilter = null;
             serviceFilterAutoOff = false;
             isViewAllReturnUpcoming = false;
             
@@ -3165,6 +3576,7 @@
         }
 
         function setServiceFilter(svc) {
+            activeLowStockFilter = null;
             serviceFilterAutoOff = false;
             if (currentServiceFilter === svc) {
                 currentServiceFilter = null;
@@ -3232,7 +3644,8 @@
         }
 
         function setDateFilter(d) {
-            if (d === 'all') selectedDates = []; 
+            activeLowStockFilter = null;
+            if (d === 'all') selectedDates = [];
             else {
                 const index = selectedDates.indexOf(d);
                 if (index > -1) selectedDates.splice(index, 1);
@@ -3270,7 +3683,8 @@
         }
 
         function setReturnDateFilter(d) {
-            if (d === 'all') selectedReturnDates = []; 
+            activeLowStockFilter = null;
+            if (d === 'all') selectedReturnDates = [];
             else {
                 const index = selectedReturnDates.indexOf(d);
                 if (index > -1) selectedReturnDates.splice(index, 1);
@@ -3402,6 +3816,7 @@
         // 검색 입력 디바운스: 타이핑이 잠깐 멈춘 뒤 한 번만 검색 (끊김 방지)
         let _searchTimer = null;
         function debouncedFilter() {
+            activeLowStockFilter = null;
             clearTimeout(_searchTimer);
             _searchTimer = setTimeout(() => filterData(), 200);
         }
@@ -3435,7 +3850,7 @@
                     '퀵': { 'all': 0, battery: 0, dates: {} },
                     '사무실': { 'all': 0, battery: 0, dates: {} },
                     '택배': { 'all': 0, battery: 0, dates: {} },
-                    '공연장': { 'all': 0, battery: 0, dates: {} }
+                    '공연장': { 'all': 0, battery: 0, dates: {}, venueGroups: {} }
                 },
                 returnUpcoming: {
                     '당일반납': { 'all': 0, battery: 0, dates: {} },
@@ -3502,6 +3917,16 @@
                     if (isBlMatch) counts.service.blacklist++;
                 }
 
+                // [NEW] 재고 부족 임박 항목 클릭: 그 기간에 해당 모델 재고를 차지하고 있는 예약만 표시
+                if (activeLowStockFilter) {
+                    if (getModelBucket(item.model) !== activeLowStockFilter.model) return false;
+                    if (!['예약신청', '확정', '대기'].includes(status)) return false;
+                    if (isRequestRow) return false;
+                    const range = getOccupiedRange(item);
+                    if (!range) return false;
+                    return range.start <= activeLowStockFilter.end && range.end >= activeLowStockFilter.start;
+                }
+
                 if (currentServiceFilter !== null) {
                     if (currentServiceFilter === 'newReservation') {
                         return isNewReservation && matchQuery;
@@ -3553,9 +3978,18 @@
                         }
                     }
                     counts.upcoming[normDelivery].dates[shortDate] = (counts.upcoming[normDelivery].dates[shortDate] || 0) + 1;
+
+                    // [NEW] 공연장 수령은 배송지 주소로 매칭한 공연장별 + 날짜별로도 집계 (공연장별 전체보기용)
+                    if (normDelivery === '공연장') {
+                        const venueName = resolveVenueGroup(item.address);
+                        const groups = counts.upcoming['공연장'].venueGroups;
+                        if (!groups[venueName]) groups[venueName] = { all: 0, dates: {} };
+                        groups[venueName].all++;
+                        groups[venueName].dates[shortDate] = (groups[venueName].dates[shortDate] || 0) + 1;
+                    }
                 }
 
-                const isReturnUpcoming = isWithinReturnBusinessDays(endDateStr, 7); 
+                const isReturnUpcoming = isWithinReturnBusinessDays(endDateStr, 7);
                 const isReturnUpcomingTarget = isReturnUpcoming && !status.includes('반납') && !status.includes('취소');
 
                 let normReturnWay = null;
@@ -3584,29 +4018,35 @@
                     if (!isUpcomingTarget) return false;
                     
                     if (selectedUpcomingFilters.length > 0) {
+                        let itemShortDate = '미정';
+                        if (startDateStr && startDateStr.includes('-')) {
+                            const parts = startDateStr.split('-');
+                            if (parts.length === 3) {
+                                const dObj = new Date(parts[0], parts[1]-1, parts[2]);
+                                const dayStr = ['일', '월', '화', '수', '목', '금', '토'][dObj.getDay()];
+                                itemShortDate = `${parseInt(parts[1])}/${parseInt(parts[2])}(${dayStr})`;
+                            }
+                        }
                         const isMatch = selectedUpcomingFilters.some(filter => {
                             if (filter.method !== normDelivery) return false;
                             if (filter.value === 'all') return true;
-                            
+
                             if (filter.value.startsWith('date:')) {
-                                const targetDate = filter.value.replace('date:', '');
-                                let shortDate = '미정';
-                                if (startDateStr && startDateStr.includes('-')) {
-                                    const parts = startDateStr.split('-');
-                                    if (parts.length === 3) {
-                                        const dObj = new Date(parts[0], parts[1]-1, parts[2]);
-                                        const dayStr = ['일', '월', '화', '수', '목', '금', '토'][dObj.getDay()];
-                                        shortDate = `${parseInt(parts[1])}/${parseInt(parts[2])}(${dayStr})`;
-                                    }
-                                }
-                                return shortDate === targetDate;
+                                return itemShortDate === filter.value.replace('date:', '');
+                            } else if (filter.value.startsWith('venuedate:')) {
+                                // [NEW] 공연장 그룹 안의 특정 날짜 (예: "인스파이어 아레나|9/10(목)")
+                                const [targetVenue, targetDate] = filter.value.replace('venuedate:', '').split('|');
+                                return resolveVenueGroup(item.address) === targetVenue && itemShortDate === targetDate;
+                            } else if (filter.value.startsWith('venue:')) {
+                                // [NEW] 특정 공연장 전체 (날짜 무관)
+                                return resolveVenueGroup(item.address) === filter.value.replace('venue:', '');
                             } else {
                                 return model.includes(filter.value);
                             }
                         });
                         if (!isMatch) return false;
                     }
-                    return matchQuery; 
+                    return matchQuery;
                 }
 
                 if (isViewAllReturnUpcoming || selectedReturnUpcomingFilters.length > 0) {
@@ -3723,8 +4163,9 @@
                 currentlyFilteredList = filtered;
             }
             
-            renderList(currentlyFilteredList); 
-            updateBulkActionBar(); 
+            renderList(currentlyFilteredList);
+            updateBulkActionBar();
+            renderLowStockAlerts();
         }
 
         function updateFilterUI(counts) {
@@ -3813,6 +4254,12 @@
                 const delBattery = counts.upcoming[del].battery; 
                 totalUpcoming += delTotal;
                 
+                // [NEW] 공연장은 고정 블록이 아니라 공연장별 동적 블록으로 렌더링 (renderVenueGroups)
+                if (del === '공연장') {
+                    renderVenueGroups(counts.upcoming['공연장'].venueGroups);
+                    return;
+                }
+
                 const block = document.getElementById(`block-upc-${del}`);
                 if (block) block.style.display = delTotal > 0 ? 'block' : 'none';
 
@@ -3824,7 +4271,7 @@
                         elAll.innerText = `${delTotal}건`;
                     }
                 }
-                
+
                 const container = document.getElementById(`upc-items-${del}`);
                 if (container) {
                     let html = '';
@@ -3977,6 +4424,7 @@
         }
 
         function setStatusFilter(status) {
+            activeLowStockFilter = null;
             if (currentFilterStatus === status && status !== 'all') currentFilterStatus = 'all';
             else currentFilterStatus = status;
             
@@ -3988,7 +4436,8 @@
         function toggleBackupFilter() { setModelFilter('백업'); }
         function toggleExtensionFilter() { setModelFilter('연장'); }
         
-        function setModelFilter(m) { 
+        function setModelFilter(m) {
+            activeLowStockFilter = null;
             if (currentModelFilter === m && m !== 'all') currentModelFilter = 'all';
             else currentModelFilter = m; 
             
@@ -3996,7 +4445,8 @@
             filterData(false); 
         }
         
-        function setDeliveryFilter(d) { 
+        function setDeliveryFilter(d) {
+            activeLowStockFilter = null;
             if (currentDeliveryFilter === d && d !== 'all') currentDeliveryFilter = 'all';
             else currentDeliveryFilter = d; 
             
@@ -4009,7 +4459,8 @@
             filterData(false); 
         }
 
-        function setDeliverySubFilter(sub) { 
+        function setDeliverySubFilter(sub) {
+            activeLowStockFilter = null;
             if (currentDeliverySubFilter === sub && sub !== 'all') currentDeliverySubFilter = 'all';
             else currentDeliverySubFilter = sub; 
             
@@ -4017,7 +4468,8 @@
             filterData(false); 
         }
 
-        function setReturnFilter(r) { 
+        function setReturnFilter(r) {
+            activeLowStockFilter = null;
             if (currentReturnFilter === r && r !== 'all') currentReturnFilter = 'all';
             else currentReturnFilter = r; 
             
@@ -4202,6 +4654,9 @@
             const updates = [];
             const autoTrashRowIds = []; // [NEW] 확정으로 바뀌는 서비스 신청건(연장/백업/변경/취소) row id 모음
             const originSyncTasks = []; // [NEW] 확정으로 바뀌는 연장/주소변경 신청건 → 원예약에 반영할 작업 목록
+            const lockersToRelease = []; // [NEW] 반납완료로 바뀌는 건 중 물품보관함이 배정되어 있던 목록
+            const waitingNotifyTargets = []; // [NEW] '대기'로 새로 바뀌는 건 중 알림톡 보낼 대상(phone) 모음
+            const reviewNotifyTargets = []; // [NEW] '반납완료'로 새로 바뀌는 건 중 리뷰요청 알림톡 보낼 대상 모음
 
             selectedRows.forEach(rowId => {
                 const targetIndex = allData.findIndex(item => String(item.row) === String(rowId));
@@ -4212,6 +4667,14 @@
                     const category = item.category;
                     allData[targetIndex].status = newStatus;
                     updates.push({ row: rowId, status: newStatus, orderTime: item.orderTime, phone: item.phone });
+                    // [NEW] 대기/대기중으로 새로 바뀌는 건 → 대기 등록 안내 알림톡 발송 대상으로 기록
+                    if ((newStatus === '대기' || newStatus === '대기중') && prevStatus !== '대기' && prevStatus !== '대기중') {
+                        waitingNotifyTargets.push(item.phone);
+                    }
+                    // [NEW] 반납/반납완료로 새로 바뀌는 건 → 리뷰 요청 알림톡 발송 대상으로 기록
+                    if ((newStatus === '반납' || newStatus === '반납완료') && prevStatus !== '반납' && prevStatus !== '반납완료') {
+                        reviewNotifyTargets.push({ phone: item.phone, name: item.name, review: item.review });
+                    }
                     // [NEW] 예약신청(원예약)이 아닌 신청건이 '확정'으로 바뀌면 자동 휴지통 이동 대상으로 기록
                     if (newStatus === '확정' && prevStatus !== '확정' && category && category !== '예약신청') {
                         autoTrashRowIds.push(String(rowId));
@@ -4224,6 +4687,11 @@
                         } else if (String(category || '').includes('주소변경')) {
                             originSyncTasks.push({ origin_ref: item.origin_ref, type: 'address', address: item.address, zipCode: item.zipCode, delivery: deliveryChoiceMap[String(rowId)] });
                         }
+                    }
+                    // [NEW] '반납완료'로 바뀌는 건에 물품보관함이 배정되어 있으면, 저장 성공 후 비우기 대상으로 기록
+                    if (newStatus === '반납완료' && prevStatus !== '반납완료' && item.locker_number) {
+                        lockersToRelease.push({ row: rowId, lockerNumber: item.locker_number });
+                        allData[targetIndex].locker_number = null;
                     }
                 }
             });
@@ -4271,6 +4739,21 @@
                     filterData(true);
                     const { error } = await sb.from('reservations').update({ deleted_at: nowIso }).in('id', autoTrashRowIds.map(Number));
                     if (error) console.error('신청건 일괄 자동 휴지통 이동 실패:', error);
+                }
+                // [NEW] 저장 성공 후에만 반납완료로 바뀐 건들의 물품보관함을 비움
+                for (const { row, lockerNumber } of lockersToRelease) {
+                    releaseLockerOnReturn(row, lockerNumber);
+                }
+                // [NEW] 저장 성공 후에만 대기 등록 안내 알림톡 발송 (일괄변경)
+                for (const phone of waitingNotifyTargets) {
+                    sendAdminAlimtalk('waiting', phone, {});
+                }
+                // [NEW] 저장 성공 후에만 리뷰 요청 알림톡 발송 (일괄변경)
+                for (const { phone, name, review } of reviewNotifyTargets) {
+                    const reviewKey = reviewTemplateKeyFor(review);
+                    if (reviewKey) {
+                        sendAdminAlimtalk(reviewKey, phone, reviewKey === 'review_none' ? {} : { '#{이름}': name || '' });
+                    }
                 }
             } catch (err) {
                 console.error("일괄 저장 실패", err);
@@ -4559,6 +5042,7 @@
 
             const originalDataBackup = [];
             const updates = [];
+            const deliveryNotifyTargets = []; // [NEW] 확정 상태에서 새로 송장번호가 배정되는 건 중 배송 시작 안내 발송 대상 모음
             const limit = Math.min(selectedRows.length, trackingNumbers.length);
 
             const sortedSelectedRows = [...selectedRows].sort((a, b) => {
@@ -4572,18 +5056,28 @@
                 const targetIndex = allData.findIndex(item => String(item.row) === String(rowId));
                 if (targetIndex !== -1) {
                     originalDataBackup.push({ index: targetIndex, data: { ...allData[targetIndex] } });
-                    allData[targetIndex].trackingNumber = trackingNumbers[i]; 
-                    updates.push({ row: rowId, tracking: trackingNumbers[i], orderTime: allData[targetIndex].orderTime, phone: allData[targetIndex].phone });
+                    const item = allData[targetIndex];
+                    const newTracking = trackingNumbers[i];
+                    // [NEW] 확정 상태 + 송장번호가 실제로 바뀌는 건만 알림톡 발송 대상으로 기록
+                    if (item.status === '확정' && newTracking && item.trackingNumber !== newTracking) {
+                        deliveryNotifyTargets.push({ phone: item.phone, name: item.name, model: item.model, tracking: newTracking });
+                    }
+                    allData[targetIndex].trackingNumber = newTracking;
+                    updates.push({ row: rowId, tracking: newTracking, orderTime: item.orderTime, phone: item.phone });
                 }
             }
 
             closeBulkTrackingModal();
             clearSelection();
-            filterData(true); 
+            filterData(true);
             showAppAlert(`${updates.length}건의 송장번호를 일괄 배정했습니다.`, "일괄 배정 완료", "✅");
 
             try {
                 await sbBatchUpdate(updates);
+                // [NEW] 저장 성공 후에만 배송 시작 안내 알림톡 발송
+                for (const { phone, name, model, tracking } of deliveryNotifyTargets) {
+                    sendDeliveryStartAlimtalk(phone, name, model, tracking);
+                }
             } catch (err) {
                 console.error("송장 일괄 저장 실패", err);
                 originalDataBackup.forEach(backup => { Object.assign(allData[backup.index], backup.data); });
@@ -5488,7 +5982,13 @@
                     body: JSON.stringify(payload) 
                 })
                 .then(res => res.json())
-                .then(data => { if(data.result !== 'success') throw new Error("서버 오류"); })
+                .then(data => {
+                    if(data.result !== 'success') throw new Error("서버 오류");
+                    // [NEW] 확정 상태에서 송장번호가 새로 등록/변경되면 배송 시작 안내 알림톡 발송
+                    if (item.status === '확정' && newTracking !== '') {
+                        sendDeliveryStartAlimtalk(item.phone, item.name, item.model, newTracking);
+                    }
+                })
                 .catch(err => {
                     allData[itemIndex].trackingNumber = oldTracking; filterData(true);
                     showToast("인터넷 연결 불안정으로 송장번호 입력이 취소되었습니다.");
@@ -6113,12 +6613,16 @@
             let originalData = null;
             if(targetIndex !== -1) {
                 originalData = { ...allData[targetIndex] };
-                Object.assign(allData[targetIndex], { 
-                    name: payload.name, phone: payload.phone, zipCode: payload.zipCode, address: payload.address, 
-                    startDate: payload.startDate, endDate: payload.endDate, delivery: payload.delivery, returnWay: payload.returnWay, 
+                Object.assign(allData[targetIndex], {
+                    name: payload.name, phone: payload.phone, zipCode: payload.zipCode, address: payload.address,
+                    startDate: payload.startDate, endDate: payload.endDate, delivery: payload.delivery, returnWay: payload.returnWay,
                     status: payload.status, trackingNumber: payload.tracking, model: payload.model, memo: payload.memo, totalPrice: payload.totalPrice,
                     review: payload.review, scheduleName: payload.scheduleName, account: payload.account
                 });
+                // [NEW] '반납완료'로 바뀌면 배정되어 있던 물품보관함도 화면에 즉시 비어있는 것으로 반영 (실제 반영은 저장 성공 후)
+                if (payload.status === '반납완료' && originalData.status !== '반납완료' && originalData.locker_number) {
+                    allData[targetIndex].locker_number = null;
+                }
             }
 
             // [NEW] 연장신청 건을 '확정'으로 저장할 때 반영할 원예약(origin_ref 매칭) 미리 찾아두기 — 실제 반영은 메인 저장 성공 후
@@ -6206,11 +6710,50 @@
                     sb.from('reservations').update({ deleted_at: nowIso }).eq('id', Number(rowId))
                       .then(({ error }) => { if (error) console.error('신청건 자동 휴지통 이동 실패:', error); });
                 }
+                // [NEW] 메인 저장이 성공한 뒤에만 '반납완료'로 바뀐 예약의 물품보관함을 비움
+                if (payload.status === '반납완료' && originalData && originalData.status !== '반납완료' && originalData.locker_number) {
+                    releaseLockerOnReturn(rowId, originalData.locker_number);
+                }
+                // [NEW] 상태/송장/메모 변경에 따른 알림톡 발송 (기존 구글 Apps Script sbHandleUpdate 로직을 이전)
+                if (originalData) {
+                    const oldStatus = originalData.status || '';
+                    const newStatus = payload.status || '';
+                    const oldTracking = originalData.trackingNumber || '';
+                    const newTracking = payload.tracking || '';
+                    const oldMemo = originalData.memo || '';
+                    const newMemo = payload.memo || '';
+
+                    // 확정 + 송장번호 등록/변경 → 배송 시작 안내(배송조회 버튼 포함)
+                    if (newStatus === '확정' && newTracking !== '' && (oldStatus !== '확정' || oldTracking !== newTracking)) {
+                        sendDeliveryStartAlimtalk(payload.phone, payload.name, payload.model, newTracking);
+                    }
+
+                    // 대기/대기중으로 변경 → 대기 등록 안내
+                    if ((newStatus === '대기' || newStatus === '대기중') && (oldStatus !== '대기' && oldStatus !== '대기중')) {
+                        sendAdminAlimtalk('waiting', payload.phone, {});
+                    }
+
+                    // 메모에 백업시작/백업완료 추가 → 백업 시작/완료 안내
+                    if (newMemo.includes('백업시작') && !oldMemo.includes('백업시작')) {
+                        sendAdminAlimtalk('backup_start', payload.phone, {});
+                    }
+                    if (newMemo.includes('백업완료') && !oldMemo.includes('백업완료')) {
+                        sendAdminAlimtalk('backup_complete', payload.phone, {});
+                    }
+
+                    // 반납/반납완료로 새로 바뀌면 → 예약 시 선택한 리뷰 플랫폼으로 리뷰 요청 안내
+                    if ((newStatus === '반납' || newStatus === '반납완료') && (oldStatus !== '반납' && oldStatus !== '반납완료')) {
+                        const reviewKey = reviewTemplateKeyFor(payload.review);
+                        if (reviewKey) {
+                            sendAdminAlimtalk(reviewKey, payload.phone, reviewKey === 'review_none' ? {} : { '#{이름}': payload.name || '' });
+                        }
+                    }
+                }
             })
             .catch(err => {
                 if(targetIndex !== -1 && originalData) {
-                    Object.assign(allData[targetIndex], originalData); 
-                    filterData(true); 
+                    Object.assign(allData[targetIndex], originalData);
+                    filterData(true);
                     showAppAlert("인터넷 연결이 불안정하여 원상복구 되었습니다.", "🚨 저장 실패", "⚠️");
                 }
             });
@@ -6430,6 +6973,7 @@
         }
 
         function applyCalendarSelection() {
+            activeLowStockFilter = null;
             selectedDates = [...tempSelectedDates];
             
             document.querySelectorAll('.date-filter-item').forEach(b => {
@@ -7011,6 +7555,31 @@
                         </div>
                         <button id="settings-multi-toggle-btn" onclick="toggleSettingsMultiMode()" class="text-[11.5px] font-black px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white shrink-0">✕ 다중선택 끄기</button>
                     </div>
+                </div>
+
+                <!-- [NEW] 재고 관리 -->
+                <div class="text-[12px] font-bold text-slate-400 px-1 mb-1.5">📦 재고 관리</div>
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-3.5 mb-4">
+                    <p class="text-[11.5px] text-slate-500 leading-relaxed mb-2.5">
+                        모델별 보유 대수를 입력해두면, 예약 현황(신청·확정·대기 상태만 반영)을 바탕으로 날짜별 대여 가능 대수를 계산해서 보여줘요.<br>
+                        <span class="text-slate-400">택배·퀵 수령은 하루 전에 미리 나가야 하니 수령일 하루 전부터, 반납은 방법과 무관하게 반납일까지 재고에서 제외해요.</span>
+                    </p>
+                    <div class="text-[11px] font-bold text-slate-400 mb-1.5">모델별 보유 대수</div>
+                    <div id="stock-count-inputs" class="grid grid-cols-3 gap-2 mb-4"></div>
+
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="shiftInventoryRange(-7)" class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600" aria-label="이전 7일">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                            </button>
+                            <span id="inventory-range-label" class="text-[13px] font-black text-slate-700 px-1"></span>
+                            <button onclick="shiftInventoryRange(7)" class="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600" aria-label="다음 7일">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                            </button>
+                        </div>
+                        <button onclick="resetInventoryRange()" class="text-[11px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2.5 py-1 rounded-lg">오늘로</button>
+                    </div>
+                    <div id="inventory-table-wrap" class="overflow-x-auto rounded-xl border border-slate-100"></div>
                 </div>
 
                 <!-- 공연장 목록 관리 -->
