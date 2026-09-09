@@ -481,7 +481,7 @@
             </div>
 
             <!-- 신규 예약 필터 -->
-            <div class="bg-emerald-50 p-4 rounded-2xl shadow-sm border border-emerald-200">
+            <div id="card-new-reservation" class="hidden bg-emerald-50 p-4 rounded-2xl shadow-sm border border-emerald-200">
                 <div class="flex justify-between items-start mb-3">
                     <div class="flex flex-col gap-1.5">
                         <h3 class="text-[15px] font-black text-emerald-900 flex items-center gap-1.5">
@@ -495,13 +495,10 @@
                         <span class="text-xs font-bold text-slate-500 svc-count" id="count-svc-newReservation">0건</span>
                     </button>
                 </div>
-                <div id="new-reservation-empty-msg" class="text-center py-4 bg-white/50 rounded-xl border border-emerald-100/50 hidden mt-0">
-                    <span class="text-[11px] font-bold text-emerald-600">신청·대기중인 예약이 없어요! 🎉</span>
-                </div>
             </div>
 
             <!-- 블랙리스트 매치 필터 -->
-            <div class="bg-red-50 p-4 rounded-2xl shadow-sm border border-red-200">
+            <div id="card-blacklist" class="hidden bg-red-50 p-4 rounded-2xl shadow-sm border border-red-200">
                 <div class="flex justify-between items-start mb-3">
                     <div class="flex flex-col gap-1.5">
                         <h3 class="text-[15px] font-black text-red-600 flex items-center gap-1.5">
@@ -518,7 +515,7 @@
             </div>
 
             <!-- 추가 서비스 현황 세로형 필터 -->
-            <div class="bg-yellow-50 p-4 rounded-2xl shadow-sm border border-yellow-200">
+            <div id="card-service" class="hidden bg-yellow-50 p-4 rounded-2xl shadow-sm border border-yellow-200">
                 <div class="flex justify-between items-start mb-3">
                     <div class="flex flex-col gap-1.5">
                         <h3 class="text-[15px] font-black text-yellow-900 flex items-center gap-1.5">
@@ -528,9 +525,6 @@
                     <span class="text-[11px] font-bold text-yellow-600 bg-white px-1.5 py-0.5 rounded border border-yellow-200 shadow-sm shrink-0 mt-0.5"></span>
                 </div>
                 <div id="service-filters-container" class="space-y-2"></div>
-                <div id="service-empty-msg" class="text-center py-4 bg-white/50 rounded-xl border border-yellow-100/50 hidden mt-2">
-                    <span class="text-[11px] font-bold text-yellow-600">요청한 서비스가 없어요! 🎉</span>
-                </div>
             </div>
 
             <!-- 이번주 수령 현황 세로형 필터 -->
@@ -696,6 +690,16 @@
                         <button onclick="bulkAddBackupMemo()" class="text-[13px] font-bold bg-amber-50 text-amber-600 hover:bg-amber-100 px-4 py-2 rounded-lg transition-colors border border-amber-200 flex items-center gap-1.5 shadow-sm">💾 백업 추가</button>
                         <button onclick="bulkSendAlimtalk('venue_unavailable')" class="text-[13px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 px-4 py-2 rounded-lg transition-colors border border-rose-200 flex items-center gap-1.5 shadow-sm">🚫 공연장 불가</button>
                         <button onclick="bulkSendAlimtalk('venue_guide')" class="text-[13px] font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-4 py-2 rounded-lg transition-colors border border-indigo-200 flex items-center gap-1.5 shadow-sm">📍 공연장 안내</button>
+                    </div>
+
+                    <div class="flex flex-wrap items-center justify-start gap-2 w-full mt-1">
+                        <span class="text-[11px] font-black text-slate-400 w-12 shrink-0">현재예약</span>
+                        <button onclick="setDispatchFilter('before')" id="btn-dispatch-before" class="text-[13px] font-bold bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 px-4 py-2 rounded-lg transition-colors shadow-sm flex items-center gap-1.5">
+                            📦 출고 전 <span id="count-dispatch-before" class="font-tnum opacity-70">0</span>
+                        </button>
+                        <button onclick="setDispatchFilter('after')" id="btn-dispatch-after" class="text-[13px] font-bold bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 px-4 py-2 rounded-lg transition-colors shadow-sm flex items-center gap-1.5">
+                            🚚 출고 후 <span id="count-dispatch-after" class="font-tnum opacity-70">0</span>
+                        </button>
                     </div>
 
                     <div id="bulk-backup-actions" class="hidden items-center justify-start gap-2 w-full mt-1">
@@ -2040,6 +2044,7 @@
         let currentServiceFilter = null;
         let serviceFilterAutoOff = false; // [NEW] 신청·대기중 0건이라 시스템이 자동으로 필터를 끈 상태인지 (사용자가 직접 끈 것과 구분)
         let activeLowStockFilter = null; // [NEW] 재고 부족 임박 항목 클릭 시 { model, start, end } — 그 기간에 재고를 차지하는 예약만 표시
+        let currentDispatchFilter = null; // [NEW] '현재예약' 필터: null | 'before'(출고 전) | 'after'(출고 후)
 
         let currentCalDate = new Date();
         let tempSelectedDates = [];
@@ -2053,7 +2058,7 @@
             loadBlacklist(); // [NEW] 예약 목록에 "사기" 뱃지가 처음부터 표시되도록 미리 로드
             // [FIX] admin_settings(모델별 보유 재고 대수 등)를 설정 화면을 열기 전에도 미리 불러와야
             // '재고 부족 임박'이 처음부터 정확한 보유 대수 기준으로 계산됩니다. (전에는 설정을 한 번 열어야만 반영됨)
-            loadAdminSettings().then(() => renderLowStockAlerts());
+            loadAdminSettings().then(() => { renderLowStockAlerts(); syncStockClosureToHomepage(); });
             fetchData();
             initPullToRefresh();
         }
@@ -2161,7 +2166,7 @@
             }
         }
 
-        let currentViewMode = 'new'; // 'new' = 신규(예약신청)만 화면표시, 'all' = 전체내역 화면표시
+        let currentViewMode = 'all'; // [NEW] 기본값을 전체내역 보기로 변경 ('new' = 신규(예약신청)만 화면표시, 'all' = 전체내역 화면표시)
         let viewModeAutoSwitchedBySearch = false; // [NEW] 검색어 때문에 자동으로 'all'로 바뀐 경우만 true (검색어 지우면 원상복구용)
         // 참고: 두 모드 모두 데이터는 항상 전체(deleted_at 없는 전체 예약)를 불러옵니다.
         // 신규/전체는 "무엇을 화면에 보여줄지"만 결정하고, 검색 필터(날짜/모델/수령방법 등)는
@@ -2191,9 +2196,10 @@
                     
                     allData = validData.sort(sortLogic);
                     renderDateFilters();
-                    renderReturnDateFilters(); 
-                    filterData(false); 
+                    renderReturnDateFilters();
+                    filterData(false);
                     updateViewModeUI();
+                    syncStockClosureToHomepage(); // [NEW] 새로고침 시에도 재고 자동마감을 다시 계산해서 동기화
                 } else { showToast("데이터 로드 실패: " + (json.message || "")); }
             } catch(e) { 
                 console.error("Fetch Error:", e);
@@ -2295,17 +2301,14 @@
             return new Date(y, mo - 1, d);
         }
         // 예약 1건이 실제로 "재고에서 빠져 있는" 기간(수령~반납)을 계산합니다.
-        // - 택배/퀵 수령: 하루 전에 미리 보내야 수령일에 맞출 수 있으므로 수령일 하루 전부터 재고 제외
-        // - 사무실/공연장 수령: 선택한 날짜에 바로 수령하므로 그날부터 제외
-        // - 반납은 방법과 무관하게 반납일까지 재고 제외 (당일반납은 반납일 다음날부터, 택배반납은 실제 도착이 반납일 다음날이라 자연히 맞음)
+        // - [NEW] 수령 방법과 상관없이 모두 택배수령처럼 계산 — 수령일 하루 전부터 재고 제외 (안전하게 보수적으로 마감 처리)
+        // - 반납은 반납일까지 재고 제외 (당일반납은 반납일 다음날부터, 택배반납은 실제 도착이 반납일 다음날이라 자연히 맞음)
         function getOccupiedRange(item) {
             const start = parseDateKeyToDate(item.startDate);
             const end = parseDateKeyToDate(item.endDate);
             if (!start || !end) return null;
-            const delivery = String(item.delivery || '');
-            const needsLeadDay = delivery.includes('택배') || delivery.includes('퀵');
             const occStart = new Date(start);
-            if (needsLeadDay) occStart.setDate(occStart.getDate() - 1);
+            occStart.setDate(occStart.getDate() - 1);
             return { start: occStart, end };
         }
         // 재고 계산 대상: 상태가 예약신청/확정/대기인 "원예약"만 (연장·백업·변경·취소·주소변경 신청건은 원예약 날짜에 이미 반영되므로 제외)
@@ -2410,37 +2413,126 @@
         // (예약이 시작/종료되면서 날마다 남은 대수 자체는 조금씩 달라질 수 있으므로, 값이 정확히 같아야만 묶지 않고
         //  "연속으로 부족한지"만 보고 묶은 뒤 그 구간에서 가장 적었던 대수(최소값)를 대표값으로 보여줍니다.)
         // (연속 2일 이상이면 날짜를 "9/5~9/7"처럼 물결표시로, 하루뿐이면 날짜 하나만 표시)
+        // 날짜를 하루씩 스캔하면서 "remaining(잔여) <= threshold"인 날이 연속되면 하나의 구간으로 묶습니다.
+        // 택배/퀵처럼 미리 발송해야 하는 예약이 이미 그 전날부터 재고를 차지하고 있었다면(리드타임),
+        // 구간의 시작일을 그 예약이 실제로 재고를 빼간 날짜까지 앞당기고, 그러면서 겹치거나 붙는 구간은 합칩니다.
+        // (예: 9/13~14가 기준치 이하여도, 그 기간과 겹치는 예약이 택배 수령이라 9/11부터 이미 재고를 썼다면 9/11부터로 확장)
+        function findCriticalRanges(ranges, total, threshold, lookaheadDays) {
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+
+            const rawRuns = [];
+            let run = null;
+            for (let i = 0; i < lookaheadDays; i++) {
+                const d = new Date(today); d.setDate(d.getDate() + i);
+                const used = ranges.filter(r => d >= r.start && d <= r.end).length;
+                const remaining = total - used;
+                if (remaining <= threshold) {
+                    if (run) run.end = d; else run = { start: d, end: d };
+                } else if (run) {
+                    rawRuns.push(run);
+                    run = null;
+                }
+            }
+            if (run) rawRuns.push(run);
+
+            const extendedRuns = rawRuns.map(r => {
+                let start = r.start;
+                ranges.forEach(res => {
+                    if (res.start <= r.end && res.end >= r.start && res.start < start) start = res.start;
+                });
+                if (start < today) start = today;
+                return { start, end: r.end };
+            });
+
+            extendedRuns.sort((a, b) => a.start - b.start);
+            const merged = [];
+            extendedRuns.forEach(r => {
+                const last = merged[merged.length - 1];
+                if (last && r.start.getTime() <= last.end.getTime() + 86400000) {
+                    if (r.end > last.end) last.end = r.end;
+                } else {
+                    merged.push({ start: r.start, end: r.end });
+                }
+            });
+            return merged;
+        }
         function getLowStockAlerts() {
             const stock = getStockCounts();
             const occupancy = getInventoryOccupancy();
-            const today = new Date(); today.setHours(0, 0, 0, 0);
 
             const alerts = [];
             MODEL_LIST.forEach(model => {
                 const total = stock[model];
                 const threshold = total <= LOW_STOCK_TIGHT_STOCK_MAX ? LOW_STOCK_THRESHOLD_TIGHT : LOW_STOCK_THRESHOLD;
-                let run = null; // { model, remaining(최소값), start, end }
-                for (let i = 0; i < LOW_STOCK_LOOKAHEAD_DAYS; i++) {
-                    const d = new Date(today); d.setDate(d.getDate() + i);
-                    const used = occupancy[model].filter(r => d >= r.start && d <= r.end).length;
-                    const remaining = total - used;
-                    if (remaining <= threshold) {
-                        if (run) {
-                            run.end = d;
-                            run.remaining = Math.min(run.remaining, remaining);
-                        } else {
-                            run = { model, remaining, start: d, end: d };
-                        }
-                    } else if (run) {
-                        alerts.push(run);
-                        run = null;
+                const ranges = occupancy[model];
+                const merged = findCriticalRanges(ranges, total, threshold, LOW_STOCK_LOOKAHEAD_DAYS);
+
+                // 합쳐진 구간 안에서 실제로 가장 심각했던(최소) 잔여 대수를 다시 계산해 대표값으로 사용
+                merged.forEach(r => {
+                    let remaining = Infinity;
+                    const cursor = new Date(r.start);
+                    while (cursor <= r.end) {
+                        const used = ranges.filter(res => cursor >= res.start && cursor <= res.end).length;
+                        remaining = Math.min(remaining, total - used);
+                        cursor.setDate(cursor.getDate() + 1);
                     }
-                }
-                if (run) alerts.push(run);
+                    alerts.push({ model, remaining, start: r.start, end: r.end });
+                });
             });
 
             alerts.sort((a, b) => a.start - b.start || a.model.localeCompare(b.model));
             return alerts;
+        }
+
+        // ===== [NEW] 재고 품절 시 홈페이지 자동 마감 =====
+        // admin_settings.stock_blocked_schedule 에 저장 — 관리자가 설정 화면에서 직접 관리하는
+        // blocked_schedule(수동 마감)과는 별도 항목이라 서로 덮어쓰지 않습니다. (홈페이지는 두 목록을 합쳐서 사용)
+        function computeStockClosureDates() {
+            const stock = getStockCounts();
+            const occupancy = getInventoryOccupancy();
+            const modelNameMap = {};
+            MODEL_LIST.forEach((m, i) => { modelNameMap[m] = SETTINGS_MODELS[i]; });
+
+            const result = {};
+            MODEL_LIST.forEach(model => {
+                const total = stock[model];
+                const ranges = occupancy[model];
+                const merged = findCriticalRanges(ranges, total, 0, LOW_STOCK_LOOKAHEAD_DAYS); // 완전 품절(0대 이하)만 마감 처리
+
+                const dateKeys = [];
+                merged.forEach(r => {
+                    const cursor = new Date(r.start);
+                    while (cursor <= r.end) {
+                        dateKeys.push(settingsDateKey(cursor.getFullYear(), cursor.getMonth() + 1, cursor.getDate()));
+                        cursor.setDate(cursor.getDate() + 1);
+                    }
+                });
+
+                const fullName = modelNameMap[model];
+                if (fullName) result[fullName] = dateKeys;
+            });
+            return result;
+        }
+        // 관리자 페이지 접속/새로고침 시마다 호출 — 계산 결과가 이전과 다를 때만 DB에 저장합니다.
+        // (보유 대수 설정이 로드되기 전에는 전부 기본값 20으로 잘못 계산될 수 있어 건너뜁니다)
+        async function syncStockClosureToHomepage() {
+            if (!settingsLoaded) return;
+            try {
+                const computed = computeStockClosureDates();
+                const prev = adminSettings.stock_blocked_schedule || {};
+                if (JSON.stringify(computed) === JSON.stringify(prev)) return;
+
+                const { error } = await sb.from('admin_settings').upsert(
+                    { key: 'stock_blocked_schedule', value: computed, updated_at: new Date().toISOString() },
+                    { onConflict: 'key' }
+                );
+                if (error) { console.error('재고 자동마감 저장 실패:', error); return; }
+
+                adminSettings.stock_blocked_schedule = computed;
+                if (settingsDraft) settingsDraft.stock_blocked_schedule = computed;
+            } catch (e) {
+                console.error('재고 자동마감 계산/저장 실패:', e);
+            }
         }
         function renderLowStockAlerts() {
             const section = document.getElementById('low-stock-section');
@@ -2489,6 +2581,7 @@
             if (!start || !end) return;
 
             activeLowStockFilter = { model, start, end };
+            currentDispatchFilter = null;
             serviceFilterAutoOff = false;
             currentServiceFilter = null;
             selectedUpcomingFilters = [];
@@ -2517,6 +2610,7 @@
         }
         function clearLowStockFilter() {
             activeLowStockFilter = null;
+            currentDispatchFilter = null;
             filterData(false);
         }
 
@@ -2664,11 +2758,12 @@
         // 해당 날짜에 설정된 항목 유무 (달력 점 표시) — draft 기준
         function settingsDayFlags(dateKey) {
             const blockedSchedule = settingsDraft.blocked_schedule || {};
+            const stockBlockedSchedule = settingsDraft.stock_blocked_schedule || {}; // [NEW] 재고 품절로 자동 마감된 날짜도 함께 표시
             const blockedDelivery = settingsDraft.blocked_delivery_dates || {};
             const availableOnsite = settingsDraft.available_onsite_dates || [];
             const venueAvailableDates = settingsDraft.venue_available_dates || {};
             return {
-                model: SETTINGS_MODELS.some(m => (blockedSchedule[m] || []).includes(dateKey)),
+                model: SETTINGS_MODELS.some(m => (blockedSchedule[m] || []).includes(dateKey) || (stockBlockedSchedule[m] || []).includes(dateKey)),
                 delivery: SETTINGS_DELIVERY_METHODS.some(m => (blockedDelivery[m.key] || []).includes(dateKey)),
                 onsite: availableOnsite.includes(dateKey),
                 venue: ((venueAvailableDates[dateKey] || {}).venues || []).length > 0
@@ -2828,10 +2923,13 @@
 
             if (settingsCategory === 'model') {
                 titleEl.innerText = `${dateLabel} · 대여모델 마감`;
+                note = '📦 표시는 재고 부족(품절)으로 자동 마감된 모델이에요. 직접 끄고 켤 수도 있지만, 재고가 남아있는 한 다음 계산 때 다시 자동으로 켜져요.';
                 const blocked = settingsDraft.blocked_schedule || {};
+                const stockBlocked = settingsDraft.stock_blocked_schedule || {}; // [NEW] 재고 품절 자동 마감
                 items = SETTINGS_MODELS.map(m => ({
                     label: m, on: keys.length > 0 && keys.every(k => (blocked[m] || []).includes(k)),
-                    toggle: `toggleSettingModel('${encodeURIComponent(m)}')`
+                    toggle: `toggleSettingModel('${encodeURIComponent(m)}')`,
+                    autoNote: (keys.length > 0 && keys.every(k => (stockBlocked[m] || []).includes(k))) ? '📦 재고 품절로 자동 마감됨' : ''
                 }));
             } else if (settingsCategory === 'delivery') {
                 titleEl.innerText = `${dateLabel} · 수령 방법 마감`;
@@ -2871,13 +2969,18 @@
             const rows = items.map(it => {
                 const stateOn = it.on;
                 // positive: on=긍정(초록), off=회색 / 마감형: on=빨강, off=회색
+                // [NEW] autoNote가 있으면(재고 품절 자동 마감) 수동으로 안 껐어도 주황 배지로 표시
                 const pill = stateOn
                     ? (positive ? 'bg-emerald-500 text-white' : 'bg-rose-500 text-white')
-                    : 'bg-slate-100 text-slate-500';
-                const pillText = stateOn ? onLabel : offLabel;
+                    : (it.autoNote ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500');
+                const pillText = stateOn ? onLabel : (it.autoNote ? '품절(자동)' : offLabel);
+                const borderCls = (it.autoNote && !stateOn) ? 'border-amber-200' : 'border-slate-200';
                 return `
-                    <button onclick="${it.toggle}" class="w-full flex items-center justify-between gap-2 p-3 mb-2 bg-white rounded-xl border border-slate-200 active:bg-slate-50 text-left">
-                        <span class="text-[13.5px] font-bold text-slate-800 min-w-0 truncate">${it.label}</span>
+                    <button onclick="${it.toggle}" class="w-full flex items-center justify-between gap-2 p-3 mb-2 bg-white rounded-xl border ${borderCls} active:bg-slate-50 text-left">
+                        <span class="min-w-0">
+                            <span class="block text-[13.5px] font-bold text-slate-800 truncate">${it.label}</span>
+                            ${it.autoNote ? `<span class="block text-[10.5px] font-bold text-amber-600 mt-0.5">${it.autoNote}</span>` : ''}
+                        </span>
                         <span class="shrink-0 text-[12px] font-black px-3 py-1 rounded-full ${pill}">${pillText}</span>
                     </button>`;
             }).join('');
@@ -3153,6 +3256,7 @@
 
         function resetAllFilters() {
             activeLowStockFilter = null;
+            currentDispatchFilter = null;
             serviceFilterAutoOff = false;
             currentFilterStatus = 'all';
             currentModelFilter = 'all';
@@ -3333,12 +3437,6 @@
                         <span class="text-xs font-bold text-slate-500 svc-count" id="count-svc-backup">0건</span>
                     </button>
                 </div>
-                <div id="block-svc-extension" style="display:none;" class="mb-2">
-                    <button onclick="setServiceFilter('extension')" class="w-full bg-white hover:bg-yellow-50 border border-yellow-100 p-2.5 rounded-xl flex justify-between items-center transition-colors svc-header" data-svc="extension">
-                        <span class="font-bold text-[13px] text-slate-700 svc-title">⏳ 대여 연장</span>
-                        <span class="text-xs font-bold text-slate-500 svc-count" id="count-svc-extension">0건</span>
-                    </button>
-                </div>
                 <div id="block-svc-change" style="display:none;" class="mb-2">
                     <button onclick="setServiceFilter('change')" class="w-full bg-white hover:bg-yellow-50 border border-yellow-100 p-2.5 rounded-xl flex justify-between items-center transition-colors svc-header" data-svc="change">
                         <span class="font-bold text-[13px] text-slate-700 svc-title">🔄 기종 변경</span>
@@ -3356,6 +3454,7 @@
 
         function viewAllUpcoming() {
             activeLowStockFilter = null;
+            currentDispatchFilter = null;
             serviceFilterAutoOff = false;
             if (isViewAllUpcoming) {
                 isViewAllUpcoming = false;
@@ -3405,6 +3504,7 @@
 
         function viewAllReturnUpcoming() {
             activeLowStockFilter = null;
+            currentDispatchFilter = null;
             serviceFilterAutoOff = false;
             if (isViewAllReturnUpcoming) {
                 isViewAllReturnUpcoming = false;
@@ -3454,6 +3554,7 @@
 
         function setUpcomingFilter(del, mod) {
             activeLowStockFilter = null;
+            currentDispatchFilter = null;
             serviceFilterAutoOff = false;
             isViewAllUpcoming = false;
             
@@ -3517,6 +3618,7 @@
 
         function setReturnUpcomingFilter(ret, mod) {
             activeLowStockFilter = null;
+            currentDispatchFilter = null;
             serviceFilterAutoOff = false;
             isViewAllReturnUpcoming = false;
             
@@ -3580,6 +3682,7 @@
 
         function setServiceFilter(svc) {
             activeLowStockFilter = null;
+            currentDispatchFilter = null;
             serviceFilterAutoOff = false;
             if (currentServiceFilter === svc) {
                 currentServiceFilter = null;
@@ -3648,6 +3751,7 @@
 
         function setDateFilter(d) {
             activeLowStockFilter = null;
+            currentDispatchFilter = null;
             if (d === 'all') selectedDates = [];
             else {
                 const index = selectedDates.indexOf(d);
@@ -3687,6 +3791,7 @@
 
         function setReturnDateFilter(d) {
             activeLowStockFilter = null;
+            currentDispatchFilter = null;
             if (d === 'all') selectedReturnDates = [];
             else {
                 const index = selectedReturnDates.indexOf(d);
@@ -3820,6 +3925,7 @@
         let _searchTimer = null;
         function debouncedFilter() {
             activeLowStockFilter = null;
+            currentDispatchFilter = null;
             clearTimeout(_searchTimer);
             _searchTimer = setTimeout(() => filterData(), 200);
         }
@@ -3861,7 +3967,8 @@
                     '택배': { 'all': 0, battery: 0, dates: {} },
                     '공연장': { 'all': 0, battery: 0, dates: {} }
                 },
-                service: { backup: 0, extension: 0, change: 0, cancel: 0, newReservation: 0, blacklist: 0 } 
+                service: { backup: 0, extension: 0, change: 0, cancel: 0, newReservation: 0, blacklist: 0 },
+                dispatch: { before: 0, after: 0 } // [NEW] 현재예약: 출고 전/후
             };
 
             ['퀵', '사무실', '택배', '공연장'].forEach(del => {
@@ -3918,6 +4025,26 @@
                     if (isBackup && !status.includes('취소')) counts.service.backup++;
                     if (isNewReservation) counts.service.newReservation++;
                     if (isBlMatch) counts.service.blacklist++;
+                }
+
+                // [NEW] '현재예약' 집계 — 출고 전(확정 상태 · 기기번호 미배정 · 대여시작일 전) / 출고 후(확정·대기·신청 상태 · 기기번호 배정됨)
+                // 기기번호가 이미 배정됐으면(=출고됨) 출고 전에서는 빠지도록 서로 겹치지 않게 함
+                // 신청건(연장/백업/변경/취소/주소변경 신청)은 실제 기기 배정 대상이 아니므로 제외
+                const startDateObj = (() => {
+                    if (!startDateStr || !startDateStr.includes('-')) return null;
+                    const parts = startDateStr.split('-');
+                    if (parts.length !== 3) return null;
+                    return new Date(parts[0], parts[1] - 1, parts[2]);
+                })();
+                const isBeforeDispatch = !isRequestRow && status === '확정' && !isAssigned && startDateObj && startDateObj.getTime() > todayForFilter.getTime();
+                const isAfterDispatch = !isRequestRow && ['확정', '대기', '예약신청'].includes(status) && isAssigned;
+                if (matchQuery) {
+                    if (isBeforeDispatch) counts.dispatch.before++;
+                    if (isAfterDispatch) counts.dispatch.after++;
+                }
+                if (currentDispatchFilter) {
+                    if (currentDispatchFilter === 'before') return isBeforeDispatch && matchQuery;
+                    if (currentDispatchFilter === 'after') return isAfterDispatch && matchQuery;
                 }
 
                 // [NEW] 재고 부족 임박 항목 클릭: 그 기간에 해당 모델 재고를 차지하고 있는 예약만 표시
@@ -4169,6 +4296,7 @@
             renderList(currentlyFilteredList);
             updateBulkActionBar();
             renderLowStockAlerts();
+            syncStockClosureToHomepage(); // [FIX] 새로고침 없이도 예약이 바뀔 때마다 홈페이지 마감을 즉시 재동기화 (내부적으로 변경 없으면 저장 안 함)
         }
 
         function updateFilterUI(counts) {
@@ -4204,7 +4332,7 @@
             updateTabCounts('filter-group-return', counts.return);
 
             let totalService = 0;
-            ['backup', 'extension', 'change', 'cancel'].forEach(svc => {
+            ['backup', 'change', 'cancel'].forEach(svc => { // [NEW] 대여연장은 부가서비스 필터에 표시하지 않음
                 const count = counts.service[svc];
                 totalService += count;
                 const block = document.getElementById(`block-svc-${svc}`);
@@ -4213,28 +4341,48 @@
                 if (elCount) elCount.innerText = `${count}건`;
             });
 
-            const svcEmptyMsg = document.getElementById('service-empty-msg');
-            if (svcEmptyMsg) {
-                svcEmptyMsg.style.display = totalService === 0 ? 'block' : 'none';
-            }
+            // [NEW] 부가서비스가 1건 이상 있을 때만 카드 전체를 보여줌 (평상시엔 숨김)
+            const svcCard = document.getElementById('card-service');
+            if (svcCard) svcCard.classList.toggle('hidden', totalService === 0);
 
             {
+                // [NEW] 필터(신청·대기중 예약)가 1건 이상 있을 때만 카드 전체를 보여줌 (평상시엔 숨김)
                 const count = counts.service.newReservation;
+                const card = document.getElementById('card-new-reservation');
+                if (card) card.classList.toggle('hidden', count === 0);
                 const block = document.getElementById('block-svc-newReservation');
                 if (block) block.style.display = count > 0 ? 'block' : 'none';
                 const elCount = document.getElementById('count-svc-newReservation');
                 if (elCount) elCount.innerText = `${count}건`;
-                const emptyMsg = document.getElementById('new-reservation-empty-msg');
-                if (emptyMsg) emptyMsg.style.display = count === 0 ? 'block' : 'none';
             }
 
             {
+                // [NEW] 블랙리스트 매치가 1건 이상 있을 때만 카드 전체를 보여줌 (평상시엔 숨김)
                 const count = counts.service.blacklist;
+                const card = document.getElementById('card-blacklist');
+                if (card) card.classList.toggle('hidden', count === 0);
                 const block = document.getElementById('block-svc-blacklist');
                 if (block) block.style.display = count > 0 ? 'block' : 'none';
                 const elCount = document.getElementById('count-svc-blacklist');
                 if (elCount) elCount.innerText = `${count}건`;
             }
+
+            // [NEW] '현재예약' 출고 전/후 버튼 — 카운트 갱신 + 선택된 쪽만 강조 표시
+            [['before', 'btn-dispatch-before', 'count-dispatch-before'], ['after', 'btn-dispatch-after', 'count-dispatch-after']].forEach(([key, btnId, countId]) => {
+                const btn = document.getElementById(btnId);
+                const countEl = document.getElementById(countId);
+                if (countEl) countEl.innerText = counts.dispatch[key];
+                if (btn) {
+                    const active = currentDispatchFilter === key;
+                    btn.classList.toggle('bg-indigo-600', active);
+                    btn.classList.toggle('border-indigo-600', active);
+                    btn.classList.toggle('text-white', active);
+                    btn.classList.toggle('bg-white', !active);
+                    btn.classList.toggle('hover:bg-slate-50', !active);
+                    btn.classList.toggle('border-slate-200', !active);
+                    btn.classList.toggle('text-slate-700', !active);
+                }
+            });
 
             // [NEW] 검색창 밑 간략 칩 (신규5, 취소1, 연장1, 변경0은 숨김, 백업1 …) — 공간이 좁아 압축 표기
             {
@@ -4428,6 +4576,7 @@
 
         function setStatusFilter(status) {
             activeLowStockFilter = null;
+            currentDispatchFilter = null;
             if (currentFilterStatus === status && status !== 'all') currentFilterStatus = 'all';
             else currentFilterStatus = status;
             
@@ -4441,6 +4590,7 @@
         
         function setModelFilter(m) {
             activeLowStockFilter = null;
+            currentDispatchFilter = null;
             if (currentModelFilter === m && m !== 'all') currentModelFilter = 'all';
             else currentModelFilter = m; 
             
@@ -4450,6 +4600,7 @@
         
         function setDeliveryFilter(d) {
             activeLowStockFilter = null;
+            currentDispatchFilter = null;
             if (currentDeliveryFilter === d && d !== 'all') currentDeliveryFilter = 'all';
             else currentDeliveryFilter = d; 
             
@@ -4464,6 +4615,7 @@
 
         function setDeliverySubFilter(sub) {
             activeLowStockFilter = null;
+            currentDispatchFilter = null;
             if (currentDeliverySubFilter === sub && sub !== 'all') currentDeliverySubFilter = 'all';
             else currentDeliverySubFilter = sub; 
             
@@ -4473,11 +4625,20 @@
 
         function setReturnFilter(r) {
             activeLowStockFilter = null;
+            currentDispatchFilter = null;
             if (currentReturnFilter === r && r !== 'all') currentReturnFilter = 'all';
             else currentReturnFilter = r; 
             
-            document.querySelectorAll('.return-filter-item').forEach(b => b.classList.toggle('active', b.dataset.id === currentReturnFilter)); 
-            filterData(false); 
+            document.querySelectorAll('.return-filter-item').forEach(b => b.classList.toggle('active', b.dataset.id === currentReturnFilter));
+            filterData(false);
+        }
+
+        // [NEW] '현재예약' 필터: 출고 전('확정' 상태이면서 대여시작일 전) / 출고 후('확정·대기·신청' 상태이면서 기기번호 배정됨)
+        function setDispatchFilter(type) {
+            activeLowStockFilter = null;
+            const nextType = currentDispatchFilter === type ? null : type;
+            currentDispatchFilter = nextType;
+            filterData(false);
         }
 
         function toggleRowSelection(e, rowId) {
@@ -6977,6 +7138,7 @@
 
         function applyCalendarSelection() {
             activeLowStockFilter = null;
+            currentDispatchFilter = null;
             selectedDates = [...tempSelectedDates];
             
             document.querySelectorAll('.date-filter-item').forEach(b => {
@@ -7565,7 +7727,7 @@
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-3.5 mb-4">
                     <p class="text-[11.5px] text-slate-500 leading-relaxed mb-2.5">
                         모델별 보유 대수를 입력해두면, 예약 현황(신청·확정·대기 상태만 반영)을 바탕으로 날짜별 대여 가능 대수를 계산해서 보여줘요.<br>
-                        <span class="text-slate-400">택배·퀵 수령은 하루 전에 미리 나가야 하니 수령일 하루 전부터, 반납은 방법과 무관하게 반납일까지 재고에서 제외해요.</span>
+                        <span class="text-slate-400">수령 방법과 상관없이 택배수령처럼 계산해서 수령일 하루 전부터, 반납은 반납일까지 재고에서 제외해요.</span>
                     </p>
                     <div class="text-[11px] font-bold text-slate-400 mb-1.5">모델별 보유 대수</div>
                     <div id="stock-count-inputs" class="grid grid-cols-3 gap-2 mb-4"></div>
