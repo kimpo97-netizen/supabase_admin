@@ -2530,6 +2530,10 @@
 
                 adminSettings.stock_blocked_schedule = computed;
                 if (settingsDraft) settingsDraft.stock_blocked_schedule = computed;
+                // [NEW] 재고가 입고되어 자동 마감이 해제된 경우 등, 변경사항을 설정 화면(달력/마감 목록)이
+                // 열려있는 동안에도 새로고침 없이 바로 반영합니다.
+                renderSettingsCalendar();
+                if (settingsCategory) renderSettingsSheetBody();
             } catch (e) {
                 console.error('재고 자동마감 계산/저장 실패:', e);
             }
