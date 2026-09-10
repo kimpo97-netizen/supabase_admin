@@ -4393,7 +4393,7 @@
                 const miniContainer = document.getElementById('svc-mini-container');
                 if (miniContainer) {
                     const MINI_LABELS = { newReservation: '신규', backup: '백업', extension: '연장', change: '변경', cancel: '취소', blacklist: '사기' };
-                    const miniHtml = ['newReservation', 'backup', 'extension', 'change', 'cancel', 'blacklist'].map(svc => {
+                    const miniHtml = ['newReservation', 'backup', 'change', 'cancel', 'blacklist'].map(svc => {
                         const c = counts.service[svc];
                         if (!c) return '';
                         const activeCls = currentServiceFilter === svc ? ' active' : '';
@@ -4847,13 +4847,16 @@
                     if (newStatus === '확정' && prevStatus !== '확정' && category && category !== '예약신청') {
                         autoTrashRowIds.push(String(rowId));
                     }
-                    // [NEW] 연장신청/주소변경신청 건이 '확정'으로 바뀌면, 저장 성공 후 원예약에 반영할 작업으로 기록
-                    // (개별 수정창 저장 시의 extendOrigIdx/addressChangeOrigIdx 로직을 일괄변경 버튼에도 동일 적용)
+                    // [NEW] 연장신청/주소변경신청/변경신청 건이 '확정'으로 바뀌면, 저장 성공 후 원예약에 반영할 작업으로 기록
+                    // (개별 수정창 저장 시의 extendOrigIdx/addressChangeOrigIdx/modelChangeOrigIdx 로직을 일괄변경 버튼에도 동일 적용)
                     if (newStatus === '확정' && prevStatus !== '확정' && item.origin_ref) {
                         if (String(category || '').includes('연장')) {
                             originSyncTasks.push({ origin_ref: item.origin_ref, type: 'extend', endDate: item.endDate });
                         } else if (String(category || '').includes('주소변경')) {
                             originSyncTasks.push({ origin_ref: item.origin_ref, type: 'address', address: item.address, zipCode: item.zipCode, delivery: deliveryChoiceMap[String(rowId)] });
+                        } else if (String(category || '') === '변경신청') {
+                            // [NEW] 대여모델만 바꾸는 신청건 — 원예약의 model을 바꾸지 않으면 재고 계산이 옛 모델 기준으로 남아 새 모델 품절이 반영되지 않음
+                            originSyncTasks.push({ origin_ref: item.origin_ref, type: 'model', model: item.model });
                         }
                     }
                     // [NEW] '반납완료'로 바뀌는 건에 물품보관함이 배정되어 있으면, 저장 성공 후 비우기 대상으로 기록
@@ -4895,6 +4898,10 @@
                             if (task.delivery) { allData[origIdx].delivery = task.delivery; patch.delivery = task.delivery; }
                             const { error } = await sb.from('reservations').update(patch).eq('id', Number(allData[origIdx].row));
                             if (error) console.error('원예약 주소 자동변경 실패:', error);
+                        } else if (task.type === 'model') {
+                            allData[origIdx].model = task.model;
+                            const { error } = await sb.from('reservations').update({ model: task.model }).eq('id', Number(allData[origIdx].row));
+                            if (error) console.error('원예약 대여모델 자동변경 실패:', error);
                         }
                     } catch (e) { console.error('origin_ref 파싱 실패:', e); }
                 }
@@ -6829,11 +6836,29 @@
                 } catch (e) { console.error('origin_ref 파싱 실패:', e); }
             }
 
+            // [NEW] 기종변경신청 건을 '확정'으로 저장할 때 반영할 원예약(origin_ref 매칭) 미리 찾아두기 — 실제 반영은 메인 저장 성공 후
+            let modelChangeOrigIdx = -1;
+            if (targetIndex !== -1 && originalData && String(originalData.category || '') === '변경신청' &&
+                payload.status === '확정' && originalData.status !== '확정' && originalData.origin_ref) {
+                try {
+                    const ref = JSON.parse(originalData.origin_ref);
+                    modelChangeOrigIdx = allData.findIndex(r =>
+                        String(r.orderTime || '') === String(ref.orderTime || '') &&
+                        String(r.name || '') === String(ref.name || '') &&
+                        String(r.phone || '') === String(ref.phone || '') &&
+                        toDash(r.startDate) === toDash(ref.startDate) &&
+                        toDash(r.endDate) === toDash(ref.endDate) &&
+                        String(r.model || '') === String(ref.model || '')
+                    );
+                    if (modelChangeOrigIdx === -1) console.warn('기종변경신청 확정: origin_ref와 일치하는 원예약을 찾지 못했습니다.', ref);
+                } catch (e) { console.error('origin_ref 파싱 실패:', e); }
+            }
+
             // [NEW] 대여연장/백업/기종변경/취소 등 "신청건"을 '확정'으로 저장하면, 저장 성공 후 자동으로 휴지통 이동
             const shouldAutoTrash = targetIndex !== -1 && originalData && originalData.category &&
                 originalData.category !== '예약신청' && payload.status === '확정' && originalData.status !== '확정';
 
-            filterData(true); 
+            filterData(true);
             closeModal();
             showAppAlert("수정 내역이 화면에 즉시 반영되었습니다.", "완료", "✅"); 
             btn.innerText = '수정 완료 (즉시반영)'; btn.disabled = false;
@@ -6868,6 +6893,14 @@
                     sb.from('reservations').update(patch).eq('id', Number(allData[addressChangeOrigIdx].row))
                       .then(({ error }) => { if (error) console.error('원예약 주소 자동변경 실패:', error); });
                     pendingSingleAddressDelivery = null;
+                }
+                // [NEW] 메인 저장이 성공한 뒤에만 원예약의 대여모델을 변경된 모델로 반영 (재고 계산이 옛 모델로 남는 것 방지)
+                if (modelChangeOrigIdx !== -1) {
+                    const newModel = payload.model;
+                    allData[modelChangeOrigIdx].model = newModel;
+                    filterData(true);
+                    sb.from('reservations').update({ model: newModel }).eq('id', Number(allData[modelChangeOrigIdx].row))
+                      .then(({ error }) => { if (error) console.error('원예약 대여모델 자동변경 실패:', error); });
                 }
                 // [NEW] 메인 저장이 성공한 뒤에만 신청건을 휴지통으로 이동 (상태는 '확정' 그대로 유지)
                 if (shouldAutoTrash) {
