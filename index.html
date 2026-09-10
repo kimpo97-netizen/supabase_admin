@@ -2285,6 +2285,9 @@
             const current = getStockCounts();
             current[model] = Math.max(0, parseInt(value, 10) || 0);
             setDraft('stock_counts', current);
+            // [FIX] 보유 대수를 늘려도(재고 입고) 저장 버튼을 누르기 전까지 자동 마감이 안 풀리던 문제 —
+            // 여기서 바로 재계산해서 동기화 (재고 부족 임박/설정 화면 미리보기와 동일하게 즉시 반영)
+            syncStockClosureToHomepage();
         }
         function getModelBucket(modelStr) {
             const m = String(modelStr || '').toUpperCase();
