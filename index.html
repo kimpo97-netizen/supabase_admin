@@ -219,28 +219,20 @@
 
         .hdr-chips { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 2px; }
         .hdr-chip { flex: none; padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 800; border: 1px solid transparent; white-space: nowrap; }
+
+        /* [NEW] 좌측 드로어의 현황 카드(재고 부족 임박/이번주 예약 인원 등)를 헤더에서 옆으로 스와이프해서 보는 카드형 목록 */
+        .hdr-card-scroll {
+            display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px;
+            overflow-anchor: none; /* [FIX] 카드가 로딩 중 숨겨졌다 나타났다 하면서 스크롤 위치가 첫 카드가 아닌 곳으로 밀리는 문제 방지 */
+        }
+        .hdr-card-scroll > div {
+            /* [FIX] 75% 미만이면 "이번주 예약 인원" 제목이 두 줄로 꺾이고, 10월처럼 두 자리 날짜(예: 10/17(토))가
+               섞이면 날짜 버튼이 한 줄에 하나씩만 들어가 버려서 75%/300px로 조정했습니다. */
+            flex: 0 0 75%; max-width: 300px; scroll-snap-align: start; max-height: 210px; overflow-y: auto;
+        }
         .hdr-icon-chip { flex: none; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 13px; font-size: 17px; border: 1px solid transparent; }
         .hdr-icon-chip:active { transform: scale(0.94); }
 
-        /* [NEW] 상단 헤더 "더보기" 접이식 메뉴 */
-        .hdr-more-wrap { position: relative; flex: none; }
-        .hdr-more-menu {
-            position: absolute; top: calc(100% + 8px); right: 0; z-index: 70; width: 190px;
-            background: #fff; border: 1px solid #e2e8f0; border-radius: 16px;
-            box-shadow: 0 12px 32px -8px rgba(30,27,75,0.25); padding: 6px; display: flex; flex-direction: column; gap: 2px;
-        }
-        .hdr-more-backdrop { position: fixed; inset: 0; z-index: 65; background: transparent; }
-        /* [FIX] .hidden(단일 클래스)과 명시도가 같아 나중에 정의된 display:flex가 항상 이겨버리던 문제 수정 */
-        .hdr-more-menu.hidden, .hdr-more-backdrop.hidden { display: none !important; }
-        .hdr-more-item {
-            display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border-radius: 11px;
-            font-size: 13px; font-weight: 800; color: #334155; background: transparent; text-align: left; border: none;
-        }
-        .hdr-more-item:active { background: #f1f5f9; }
-        .hdr-more-item .hdr-more-ico {
-            width: 30px; height: 30px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
-            font-size: 15px; flex: none;
-        }
         .hdr-chip:active { transform: scale(0.95); }
         .chip-amber { background: #fffbeb; color: #b45309; border-color: #fde68a; }
         .chip-orange { background: #fff7ed; color: #c2410c; border-color: #fed7aa; }
@@ -400,22 +392,6 @@
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="14" y1="12" y2="12"/><line x1="4" x2="18" y1="18" y2="18"/></svg>
             </button>
             <span class="hdr-title"><span class="hdr-title-text">세린캠</span></span>
-            <div class="hdr-more-wrap">
-                <button class="hdr-icon-btn hdr-menu" onclick="toggleMoreMenu()" aria-label="더보기 메뉴">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
-                </button>
-                <div id="hdr-more-backdrop" class="hidden hdr-more-backdrop" onclick="closeMoreMenu()"></div>
-                <div id="hdr-more-menu" class="hidden hdr-more-menu">
-                    <button class="hdr-more-item" onclick="closeMoreMenu(); openSettings();"><span class="hdr-more-ico" style="background:#eef2ff; color:#4f46e5;">⚙️</span> 설정</button>
-                    <button class="hdr-more-item" onclick="closeMoreMenu(); switchViewMode();"><span class="hdr-more-ico" style="background:#eef2ff; color:#4f46e5;">🔀</span> 화면 전환(PC/모바일)</button>
-                    <button class="hdr-more-item" onclick="closeMoreMenu(); window.open('https://kimpo97-netizen.github.io/admin/', '_blank');"><span class="hdr-more-ico" style="background:#f5f3ff; color:#7c3aed;">🏟️</span> 공연장</button>
-                    <button class="hdr-more-item" onclick="closeMoreMenu(); openSales();"><span class="hdr-more-ico" style="background:#ecfdf5; color:#059669;">📊</span> 매출 통계</button>
-                    <button class="hdr-more-item" onclick="closeMoreMenu(); openTrash();"><span class="hdr-more-ico" style="background:#fff1f2; color:#e11d48;">🗑️</span> 휴지통</button>
-                    <button class="hdr-more-item" onclick="closeMoreMenu(); openLockerManager();"><span class="hdr-more-ico" style="background:#fff1f2; color:#e11d48;">🗄️</span> 물품보관함</button>
-                    <button class="hdr-more-item" onclick="closeMoreMenu(); openBlacklist();"><span class="hdr-more-ico" style="background:#fef2f2; color:#dc2626;">🚨</span> 블랙리스트</button>
-                        <button class="hdr-more-item" onclick="closeMoreMenu(); openReviewManager();"><span class="hdr-more-ico" style="background:#fffbeb; color:#b45309;">⭐</span> 리뷰 관리</button>
-                </div>
-            </div>
             <button class="hdr-icon-btn hdr-refresh" onclick="fetchData()" aria-label="최신 정보 불러오기">
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
             </button>
@@ -439,36 +415,21 @@
             <button onclick="openCalendarModal()" class="hdr-chip chip-indigo">📅 달력검색</button>
             <button onclick="resetAllFilters()" class="hdr-chip chip-slate">🔄 필터초기화</button>
         </div>
-      </div>
-    </header>
 
-    <!-- 필터 드로어 오버레이 -->
-    <div id="filter-overlay" onclick="closeFilterDrawer()"></div>
+        <!-- [NEW] 우측 상단 "더보기" 접이식 메뉴를 없애고, 여기에 항목들을 바로 노출 -->
+        <div class="hdr-chips no-scrollbar">
+            <button onclick="openSettings()" class="hdr-chip chip-indigo">⚙️ 설정</button>
+            <button onclick="switchViewMode()" class="hdr-chip chip-indigo">🔀 화면전환</button>
+            <button onclick="window.open('https://kimpo97-netizen.github.io/admin/', '_blank')" class="hdr-chip chip-indigo">🏟️ 공연장</button>
+            <button onclick="openSales()" class="hdr-chip chip-indigo">📊 매출통계</button>
+            <button onclick="openTrash()" class="hdr-chip chip-rose">🗑️ 휴지통</button>
+            <button onclick="openLockerManager()" class="hdr-chip chip-rose">🗄️ 보관함</button>
+            <button onclick="openBlacklist()" class="hdr-chip chip-rose">🚨 블랙리스트</button>
+            <button onclick="openReviewManager()" class="hdr-chip chip-amber">⭐ 리뷰관리</button>
+        </div>
 
-    <!-- 메인 레이아웃 (모바일 단일 컬럼) -->
-    <div class="page-wrap">
-
-        <!-- 좌측 슬라이드 필터 드로어 -->
-        <aside id="filter-drawer">
-          <div class="drawer-topbar">
-            <button onclick="closeFilterDrawer()" class="drawer-close-btn" aria-label="닫기">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-            </button>
-            <span class="drawer-topbar-title">🔍 검색 필터</span>
-          </div>
-          <div class="drawer-scroll flex flex-col gap-5">
-
-            <div class="flex flex-col gap-2 mb-1">
-                <button onclick="resetAllFilters()" class="w-full bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-500 hover:text-slate-700 py-3 rounded-2xl font-bold shadow-sm transition-all flex items-center justify-center gap-2 text-[13px]">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
-                    모든 검색/필터 초기화
-                </button>
-                <button onclick="openCalendarModal()" class="w-full bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 py-3 rounded-2xl font-bold shadow-sm transition-all flex items-center justify-center gap-2 text-[13px]">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
-                    수령일 달력 검색
-                </button>
-            </div>
-
+        <!-- [NEW] 좌측 드로어 안에 있던 현황 카드들을 여기로 옮겨서, 드로어를 열지 않아도 옆으로 스와이프해서 바로 볼 수 있게 함 -->
+        <div class="hdr-card-scroll no-scrollbar">
             <!-- [NEW] 재고 부족 임박 (재고 5대 이하) -->
             <div id="low-stock-section" class="hidden bg-rose-50 p-4 rounded-2xl shadow-sm border border-rose-200">
                 <div class="flex justify-between items-start mb-3">
@@ -558,6 +519,36 @@
                 <div id="return-upc-empty-msg" class="text-center py-4 bg-white/50 rounded-xl border border-rose-100/50 hidden mt-2">
                     <span class="text-[11px] font-bold text-rose-400">이번 주 반납 예정건이 없어요! 🎉</span>
                 </div>
+            </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- 필터 드로어 오버레이 -->
+    <div id="filter-overlay" onclick="closeFilterDrawer()"></div>
+
+    <!-- 메인 레이아웃 (모바일 단일 컬럼) -->
+    <div class="page-wrap">
+
+        <!-- 좌측 슬라이드 필터 드로어 -->
+        <aside id="filter-drawer">
+          <div class="drawer-topbar">
+            <button onclick="closeFilterDrawer()" class="drawer-close-btn" aria-label="닫기">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
+            <span class="drawer-topbar-title">🔍 검색 필터</span>
+          </div>
+          <div class="drawer-scroll flex flex-col gap-5">
+
+            <div class="flex flex-col gap-2 mb-1">
+                <button onclick="resetAllFilters()" class="w-full bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-500 hover:text-slate-700 py-3 rounded-2xl font-bold shadow-sm transition-all flex items-center justify-center gap-2 text-[13px]">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+                    모든 검색/필터 초기화
+                </button>
+                <button onclick="openCalendarModal()" class="w-full bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 py-3 rounded-2xl font-bold shadow-sm transition-all flex items-center justify-center gap-2 text-[13px]">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+                    수령일 달력 검색
+                </button>
             </div>
 
             <!-- 상세 필터 접기/펼치기 버튼 -->
@@ -2201,6 +2192,10 @@
                     filterData(false);
                     updateViewModeUI();
                     syncStockClosureToHomepage(); // [NEW] 새로고침 시에도 재고 자동마감을 다시 계산해서 동기화
+                    // [FIX] 카드들이 숨겨졌다 나타났다 하면서 캐러셀이 첫 카드가 아닌 위치로 밀려있을 수 있어,
+                    // 데이터를 새로 불러온 뒤에는 항상 첫 카드부터 스와이프할 수 있도록 위치를 되돌림
+                    const cardScroll = document.querySelector('.hdr-card-scroll');
+                    if (cardScroll) cardScroll.scrollLeft = 0;
                 } else { showToast("데이터 로드 실패: " + (json.message || "")); }
             } catch(e) { 
                 console.error("Fetch Error:", e);
@@ -2615,6 +2610,43 @@
 
             const dateLabel = start.getTime() === end.getTime() ? fmtMonthDay(start) : `${fmtMonthDay(start)}~${fmtMonthDay(end)}`;
             showToast(`${model} · ${dateLabel} 재고를 차지하는 예약 ${currentlyFilteredList.length}건`);
+
+            // [NEW] 목록 필터링과 동시에, 설정 화면을 직접 열지 않아도 바로 "재고 마감" 상태 팝업을 보여줌
+            openStockClosurePopup(startKey, endKey);
+        }
+        // [NEW] 재고 부족 임박 항목을 눌렀을 때, 설정 > 일정관리를 거치지 않고 바로 해당 날짜(구간)의
+        // "대여모델 마감" 화면을 띄워줌 (📦 재고 품절로 자동 마감됨 배지를 바로 확인 가능)
+        async function openStockClosurePopup(startKey, endKey) {
+            document.getElementById('settings-overlay').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            settingsCursor = new Date(); settingsCursor.setDate(1);
+            if (!settingsLoaded) await loadAdminSettings();
+            markSettingsDirty(settingsDirty);
+            renderSettingsCalendar();
+            updateMultiModeUI();
+            renderVenueCustomList();
+            renderConcertVenuePicker();
+            renderConcertList();
+            inventoryCursorDate = new Date();
+            renderStockInputs();
+            renderInventoryTable();
+
+            const start = parseDateKeyToDate(startKey);
+            const end = parseDateKeyToDate(endKey);
+            const keys = [];
+            if (start && end) {
+                const cursor = new Date(start);
+                while (cursor <= end) {
+                    keys.push(settingsDateKey(cursor.getFullYear(), cursor.getMonth() + 1, cursor.getDate()));
+                    cursor.setDate(cursor.getDate() + 1);
+                }
+            }
+            settingsBulkMode = keys.length > 1;
+            settingsMultiDates = keys.length > 1 ? keys : [];
+            settingsPickedKey = keys.length === 1 ? keys[0] : null;
+            settingsCategory = 'model';
+            document.getElementById('settings-sheet-root').classList.remove('hidden');
+            renderSettingsSheetBody();
         }
         function clearLowStockFilter() {
             activeLowStockFilter = null;
@@ -2693,21 +2725,6 @@
         }
 
         // [NEW] 상단 헤더 "더보기" 접이식 메뉴
-        function toggleMoreMenu() {
-            const menu = document.getElementById('hdr-more-menu');
-            const backdrop = document.getElementById('hdr-more-backdrop');
-            if (menu.classList.contains('hidden')) {
-                menu.classList.remove('hidden');
-                backdrop.classList.remove('hidden');
-            } else {
-                closeMoreMenu();
-            }
-        }
-        function closeMoreMenu() {
-            document.getElementById('hdr-more-menu').classList.add('hidden');
-            document.getElementById('hdr-more-backdrop').classList.add('hidden');
-        }
-
         async function openSettings() {
             document.getElementById('settings-overlay').classList.remove('hidden');
             document.body.style.overflow = 'hidden';
