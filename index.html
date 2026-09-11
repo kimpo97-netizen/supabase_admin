@@ -419,7 +419,6 @@
         <!-- [NEW] 우측 상단 "더보기" 접이식 메뉴를 없애고, 여기에 항목들을 바로 노출 -->
         <div class="hdr-chips no-scrollbar">
             <button onclick="openSettings()" class="hdr-chip chip-indigo">⚙️ 설정</button>
-            <button onclick="switchViewMode()" class="hdr-chip chip-indigo">🔀 화면전환</button>
             <button onclick="window.open('https://kimpo97-netizen.github.io/admin/', '_blank')" class="hdr-chip chip-indigo">🏟️ 공연장</button>
             <button onclick="openSales()" class="hdr-chip chip-indigo">📊 매출통계</button>
             <button onclick="openTrash()" class="hdr-chip chip-rose">🗑️ 휴지통</button>
@@ -1182,7 +1181,6 @@
             startApp();
         }
         async function doLogout() { await sb.auth.signOut(); location.reload(); }
-        function switchViewMode() { localStorage.removeItem('sc_admin_view_pref'); location.href = '관리자.html'; }
 
         // ===== 일괄작업 묶음 처리 (동시 실행으로 빠르게) =====
         function buildPatch(u) {
@@ -2084,8 +2082,23 @@
                 });
             }
 
+            // [FIX] 상단 카드 캐러셀처럼 자체적으로 세로 스크롤되는 영역(overflow-y:auto) 안에서
+            // 이미 아래로 스크롤한 상태라면, 그 영역을 다시 위로 스크롤하려는 제스처가 항상
+            // window.scrollY<=0 조건과 겹쳐서 새로고침으로 잘못 인식되던 문제를 방지합니다.
+            function findScrolledNestedAncestor(el) {
+                while (el && el !== document.body) {
+                    if (el.scrollHeight > el.clientHeight) {
+                        const overflowY = window.getComputedStyle(el).overflowY;
+                        if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollTop > 0) return el;
+                    }
+                    el = el.parentElement;
+                }
+                return null;
+            }
+
             document.addEventListener('touchstart', (e) => {
                 if (refreshing || anyOverlayOpen()) { pulling = false; return; }
+                if (findScrolledNestedAncestor(e.target)) { pulling = false; return; }
                 if (window.scrollY <= 0) {
                     startY = e.touches[0].clientY;
                     pulling = true;
