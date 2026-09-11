@@ -221,6 +221,26 @@
         .hdr-chips { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 2px; }
         .hdr-chip { flex: none; padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 800; border: 1px solid transparent; white-space: nowrap; }
 
+        /* [NEW] 설정/공연장/매출통계/휴지통/보관함/블랙리스트/리뷰관리를 톱니바퀴 아이콘 한 곳으로 모은 접이식 메뉴.
+           header가 backdrop-filter를 쓰면 그 안의 position:fixed 자손은 화면 전체가 아니라 header 기준으로 붙어버려서
+           (CSS 스펙상 filter/backdrop-filter가 fixed의 컨테이닝 블록이 됨), header 바깥에 두고 위치는 JS로 계산합니다. */
+        .hdr-quick-menu {
+            position: fixed; z-index: 70; width: 190px;
+            background: #fff; border: 1px solid #e2e8f0; border-radius: 16px;
+            box-shadow: 0 12px 32px -8px rgba(30,27,75,0.25); padding: 6px; display: flex; flex-direction: column; gap: 2px;
+        }
+        .hdr-quick-backdrop { position: fixed; inset: 0; z-index: 65; background: transparent; }
+        .hdr-quick-menu.hidden, .hdr-quick-backdrop.hidden { display: none !important; }
+        .hdr-quick-item {
+            display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border-radius: 11px;
+            font-size: 13px; font-weight: 800; color: #334155; background: transparent; text-align: left; border: none;
+        }
+        .hdr-quick-item:active { background: #f1f5f9; }
+        .hdr-quick-item .hdr-quick-ico {
+            width: 30px; height: 30px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+            font-size: 15px; flex: none;
+        }
+
         /* [NEW] 좌측 드로어의 현황 카드(재고 부족 임박/이번주 예약 인원 등)를 헤더에서 옆으로 스와이프해서 보는 목록.
            카드마다 제목 줄을 없애고 내용 한 줄만 남겨서 세로폭을 최소화했습니다. */
         .hdr-card-scroll {
@@ -400,6 +420,7 @@
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="14" y1="12" y2="12"/><line x1="4" x2="18" y1="18" y2="18"/></svg>
             </button>
             <span class="hdr-title"><span class="hdr-title-text">세린캠</span></span>
+            <button id="hdr-quick-menu-btn" class="hdr-icon-btn hdr-menu" onclick="toggleQuickMenu()" aria-label="설정 메뉴">⚙️</button>
             <button class="hdr-icon-btn hdr-refresh" onclick="fetchData()" aria-label="최신 정보 불러오기">
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
             </button>
@@ -422,17 +443,6 @@
             <button id="view-mode-btn" onclick="toggleViewMode()" class="hdr-chip chip-indigo" style="font-weight:900;">📋 전체내역 보기</button>
             <button onclick="openCalendarModal()" class="hdr-chip chip-indigo">📅 달력검색</button>
             <button onclick="resetAllFilters()" class="hdr-chip chip-slate">🔄 필터초기화</button>
-        </div>
-
-        <!-- [NEW] 우측 상단 "더보기" 접이식 메뉴를 없애고, 여기에 항목들을 바로 노출 -->
-        <div class="hdr-chips no-scrollbar">
-            <button onclick="openSettings()" class="hdr-chip chip-indigo">⚙️ 설정</button>
-            <button onclick="window.open('https://kimpo97-netizen.github.io/admin/', '_blank')" class="hdr-chip chip-indigo">🏟️ 공연장</button>
-            <button onclick="openSales()" class="hdr-chip chip-indigo">📊 매출통계</button>
-            <button onclick="openTrash()" class="hdr-chip chip-rose">🗑️ 휴지통</button>
-            <button onclick="openLockerManager()" class="hdr-chip chip-rose">🗄️ 보관함</button>
-            <button onclick="openBlacklist()" class="hdr-chip chip-rose">🚨 블랙리스트</button>
-            <button onclick="openReviewManager()" class="hdr-chip chip-amber">⭐ 리뷰관리</button>
         </div>
 
         <!-- [NEW] 좌측 드로어 안에 있던 현황 카드들을 여기로 옮겨서, 드로어를 열지 않아도 옆으로 스와이프해서 바로 볼 수 있게 함 -->
@@ -485,6 +495,20 @@
         </div>
       </div>
     </header>
+
+    <!-- [NEW] 톱니바퀴 접이식 메뉴 (설정/공연장/매출통계/휴지통/보관함/블랙리스트/리뷰관리)
+         header 안에 두면 header의 backdrop-filter가 position:fixed의 기준을 header로 바꿔버려서
+         화면 전체를 덮지 못하는 문제가 있어 header 바깥(body 바로 아래)에 둡니다. -->
+    <div id="hdr-quick-backdrop" class="hidden hdr-quick-backdrop" onclick="closeQuickMenu()"></div>
+    <div id="hdr-quick-menu" class="hidden hdr-quick-menu">
+        <button class="hdr-quick-item" onclick="closeQuickMenu(); openSettings();"><span class="hdr-quick-ico" style="background:#eef2ff; color:#4f46e5;">⚙️</span> 설정</button>
+        <button class="hdr-quick-item" onclick="closeQuickMenu(); window.open('https://kimpo97-netizen.github.io/admin/', '_blank');"><span class="hdr-quick-ico" style="background:#f5f3ff; color:#7c3aed;">🏟️</span> 공연장</button>
+        <button class="hdr-quick-item" onclick="closeQuickMenu(); openSales();"><span class="hdr-quick-ico" style="background:#ecfdf5; color:#059669;">📊</span> 매출 통계</button>
+        <button class="hdr-quick-item" onclick="closeQuickMenu(); openTrash();"><span class="hdr-quick-ico" style="background:#fff1f2; color:#e11d48;">🗑️</span> 휴지통</button>
+        <button class="hdr-quick-item" onclick="closeQuickMenu(); openLockerManager();"><span class="hdr-quick-ico" style="background:#fff1f2; color:#e11d48;">🗄️</span> 물품보관함</button>
+        <button class="hdr-quick-item" onclick="closeQuickMenu(); openBlacklist();"><span class="hdr-quick-ico" style="background:#fef2f2; color:#dc2626;">🚨</span> 블랙리스트</button>
+        <button class="hdr-quick-item" onclick="closeQuickMenu(); openReviewManager();"><span class="hdr-quick-ico" style="background:#fffbeb; color:#b45309;">⭐</span> 리뷰 관리</button>
+    </div>
 
     <!-- 필터 드로어 오버레이 -->
     <div id="filter-overlay" onclick="closeFilterDrawer()"></div>
@@ -1161,6 +1185,28 @@
             startApp();
         }
         async function doLogout() { await sb.auth.signOut(); location.reload(); }
+        // [NEW] 톱니바퀴 아이콘 접이식 메뉴 (설정/공연장/매출통계/휴지통/보관함/블랙리스트/리뷰관리)
+        function toggleQuickMenu() {
+            const menu = document.getElementById('hdr-quick-menu');
+            const backdrop = document.getElementById('hdr-quick-backdrop');
+            if (menu.classList.contains('hidden')) {
+                // header 바깥(position:fixed)에 있으므로, 버튼 위치를 기준으로 좌표를 직접 계산
+                const btn = document.getElementById('hdr-quick-menu-btn');
+                if (btn) {
+                    const rect = btn.getBoundingClientRect();
+                    menu.style.top = (rect.bottom + 8) + 'px';
+                    menu.style.right = (window.innerWidth - rect.right) + 'px';
+                }
+                menu.classList.remove('hidden');
+                backdrop.classList.remove('hidden');
+            } else {
+                closeQuickMenu();
+            }
+        }
+        function closeQuickMenu() {
+            document.getElementById('hdr-quick-menu').classList.add('hidden');
+            document.getElementById('hdr-quick-backdrop').classList.add('hidden');
+        }
 
         // ===== 일괄작업 묶음 처리 (동시 실행으로 빠르게) =====
         function buildPatch(u) {
@@ -2055,7 +2101,7 @@
                 })) return true;
 
                 // 나머지 오버레이/모달: 'hidden' 클래스가 없으면 열려있는 것
-                const hiddenBased = ['settings-overlay', 'trash-overlay', 'sales-overlay', 'review-manager', 'app-modal', 'add-reservation-modal', 'bulk-tracking-modal', 'bulk-tracking-review-modal', 'today-post-modal', 'review-edit-modal'];
+                const hiddenBased = ['settings-overlay', 'trash-overlay', 'sales-overlay', 'review-manager', 'app-modal', 'add-reservation-modal', 'bulk-tracking-modal', 'bulk-tracking-review-modal', 'today-post-modal', 'review-edit-modal', 'hdr-quick-menu'];
                 return hiddenBased.some(id => {
                     const el = document.getElementById(id);
                     return el && !el.classList.contains('hidden');
