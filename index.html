@@ -226,6 +226,12 @@
         .hdr-card-scroll {
             display: flex; align-items: flex-start; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px;
             overflow-anchor: none; /* [FIX] 카드가 로딩 중 숨겨졌다 나타났다 하면서 스크롤 위치가 밀리는 문제 방지 */
+            max-height: 160px; opacity: 1; transition: max-height .25s ease, opacity .2s ease, margin .25s ease;
+        }
+        /* [NEW] 아래 예약 목록을 스크롤하면 카드 영역을 자연스럽게 접어서 화면을 넓게 쓰고,
+           맨 위로 돌아오면 다시 펼침 (아래 scroll 리스너에서 이 클래스를 토글) */
+        .hdr-card-scroll.hdr-card-collapsed {
+            max-height: 0; opacity: 0; margin-top: -8px; overflow: hidden; pointer-events: none;
         }
         .hdr-card-scroll > div {
             /* align-items:flex-start로 카드마다 내용 높이만큼만 차지하고, 내용이 많은 카드는 max-height로 눌러서
@@ -1042,6 +1048,21 @@
                 }
             }
         });
+
+        // [NEW] 아래 예약 목록을 스크롤하면 상단 현황 카드를 자연스럽게 접어서 화면을 넓게 쓰고,
+        // 맨 위로 돌아오면 다시 펼침
+        let hdrCardsCollapsed = false;
+        window.addEventListener('scroll', () => {
+            const cardScroll = document.querySelector('.hdr-card-scroll');
+            if (!cardScroll) return;
+            if (window.scrollY > 10 && !hdrCardsCollapsed) {
+                cardScroll.classList.add('hdr-card-collapsed');
+                hdrCardsCollapsed = true;
+            } else if (window.scrollY <= 10 && hdrCardsCollapsed) {
+                cardScroll.classList.remove('hdr-card-collapsed');
+                hdrCardsCollapsed = false;
+            }
+        }, { passive: true });
 
         // ===== 좌측 필터 드로어 열기/닫기 =====
         function openFilterDrawer() {
