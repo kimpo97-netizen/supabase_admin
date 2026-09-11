@@ -69,6 +69,7 @@
         .status-badge { display: inline-flex; align-items: center; justify-content: center; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; line-height: 1; border: 1px solid transparent; white-space: nowrap; }
         .status-wait { background-color: #FFF7ED; color: #C2410C; border-color: #FED7AA; }
         .status-confirm { background-color: #EFF6FF; color: #1D4ED8; border-color: #BFDBFE; }
+        .status-pickup { background-color: #FFF7ED; color: #C2410C; border-color: #FDBA74; }
         .status-return { background-color: #F1F5F9; color: #475569; border-color: #E2E8F0; }
         .status-hold { background-color: #F5F3FF; color: #7C3AED; border-color: #DDD6FE; } 
         .status-cancel { background-color: #FEF2F2; color: #DC2626; border-color: #FECACA; }
@@ -220,15 +221,16 @@
         .hdr-chips { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 2px; }
         .hdr-chip { flex: none; padding: 7px 12px; border-radius: 999px; font-size: 12px; font-weight: 800; border: 1px solid transparent; white-space: nowrap; }
 
-        /* [NEW] 좌측 드로어의 현황 카드(재고 부족 임박/이번주 예약 인원 등)를 헤더에서 옆으로 스와이프해서 보는 카드형 목록 */
+        /* [NEW] 좌측 드로어의 현황 카드(재고 부족 임박/이번주 예약 인원 등)를 헤더에서 옆으로 스와이프해서 보는 목록.
+           카드마다 제목 줄을 없애고 내용 한 줄만 남겨서 세로폭을 최소화했습니다. */
         .hdr-card-scroll {
-            display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px;
-            overflow-anchor: none; /* [FIX] 카드가 로딩 중 숨겨졌다 나타났다 하면서 스크롤 위치가 첫 카드가 아닌 곳으로 밀리는 문제 방지 */
+            display: flex; align-items: flex-start; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px;
+            overflow-anchor: none; /* [FIX] 카드가 로딩 중 숨겨졌다 나타났다 하면서 스크롤 위치가 밀리는 문제 방지 */
         }
         .hdr-card-scroll > div {
-            /* [FIX] 75% 미만이면 "이번주 예약 인원" 제목이 두 줄로 꺾이고, 10월처럼 두 자리 날짜(예: 10/17(토))가
-               섞이면 날짜 버튼이 한 줄에 하나씩만 들어가 버려서 75%/300px로 조정했습니다. */
-            flex: 0 0 75%; max-width: 300px; scroll-snap-align: start; max-height: 210px; overflow-y: auto;
+            /* align-items:flex-start로 카드마다 내용 높이만큼만 차지하고, 내용이 많은 카드는 max-height로 눌러서
+               카드 안에서만 스크롤되게 함 (옆으로 스와이프하는 카드 자체의 세로폭은 항상 짧게 유지) */
+            flex: 0 0 75%; max-width: 300px; scroll-snap-align: start; max-height: 150px; overflow-y: auto;
         }
         .hdr-icon-chip { flex: none; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 13px; font-size: 17px; border: 1px solid transparent; }
         .hdr-icon-chip:active { transform: scale(0.94); }
@@ -429,44 +431,8 @@
 
         <!-- [NEW] 좌측 드로어 안에 있던 현황 카드들을 여기로 옮겨서, 드로어를 열지 않아도 옆으로 스와이프해서 바로 볼 수 있게 함 -->
         <div class="hdr-card-scroll no-scrollbar">
-            <!-- [NEW] 재고 부족 임박 (재고 5대 이하) -->
-            <div id="low-stock-section" class="hidden bg-rose-50 p-4 rounded-2xl shadow-sm border border-rose-200">
-                <div class="flex justify-between items-start mb-3">
-                    <div class="flex flex-col gap-1.5">
-                        <h3 class="text-[15px] font-black text-rose-900 flex items-center gap-1.5">
-                            <span class="text-base">⚠️</span> 재고 부족 임박
-                        </h3>
-                    </div>
-                </div>
-                <div id="low-stock-list" class="space-y-1.5"></div>
-            </div>
-
-            <!-- 신규 예약 필터 -->
-            <div id="card-new-reservation" class="hidden bg-emerald-50 p-4 rounded-2xl shadow-sm border border-emerald-200">
-                <div class="flex justify-between items-start mb-3">
-                    <div class="flex flex-col gap-1.5">
-                        <h3 class="text-[15px] font-black text-emerald-900 flex items-center gap-1.5">
-                            <span class="text-base">🔔</span> 신규 예약
-                        </h3>
-                    </div>
-                </div>
-                <div id="block-svc-newReservation" style="display:none;">
-                    <button onclick="setServiceFilter('newReservation')" class="w-full bg-white hover:bg-emerald-50 border border-emerald-100 p-2.5 rounded-xl flex justify-between items-center transition-colors svc-header" data-svc="newReservation">
-                        <span class="font-bold text-[13px] text-slate-700 svc-title">📝 신청·대기중</span>
-                        <span class="text-xs font-bold text-slate-500 svc-count" id="count-svc-newReservation">0건</span>
-                    </button>
-                </div>
-            </div>
-
             <!-- 블랙리스트 매치 필터 -->
-            <div id="card-blacklist" class="hidden bg-red-50 p-4 rounded-2xl shadow-sm border border-red-200">
-                <div class="flex justify-between items-start mb-3">
-                    <div class="flex flex-col gap-1.5">
-                        <h3 class="text-[15px] font-black text-red-600 flex items-center gap-1.5">
-                            <span class="text-base">🚨</span> 블랙리스트 매치
-                        </h3>
-                    </div>
-                </div>
+            <div id="card-blacklist" class="hidden bg-red-50 p-2.5 rounded-2xl shadow-sm border border-red-200">
                 <div id="block-svc-blacklist" style="display:none;">
                     <button onclick="setServiceFilter('blacklist')" class="w-full bg-white hover:bg-rose-50 border border-red-100 p-2.5 rounded-xl flex justify-between items-center transition-colors svc-header" data-svc="blacklist">
                         <span class="font-bold text-[13px] text-slate-700 svc-title">🚨 사기 의심 예약</span>
@@ -475,45 +441,36 @@
                 </div>
             </div>
 
-            <!-- 추가 서비스 현황 세로형 필터 -->
-            <div id="card-service" class="hidden bg-yellow-50 p-4 rounded-2xl shadow-sm border border-yellow-200">
-                <div class="flex justify-between items-start mb-3">
-                    <div class="flex flex-col gap-1.5">
-                        <h3 class="text-[15px] font-black text-yellow-900 flex items-center gap-1.5">
-                            <span class="text-base">⚙️</span> 부가 서비스
-                        </h3>
-                    </div>
-                    <span class="text-[11px] font-bold text-yellow-600 bg-white px-1.5 py-0.5 rounded border border-yellow-200 shadow-sm shrink-0 mt-0.5"></span>
+            <!-- 신규 예약 필터 -->
+            <div id="card-new-reservation" class="hidden bg-emerald-50 p-2.5 rounded-2xl shadow-sm border border-emerald-200">
+                <div id="block-svc-newReservation" style="display:none;">
+                    <button onclick="setServiceFilter('newReservation')" class="w-full bg-white hover:bg-emerald-50 border border-emerald-100 p-2.5 rounded-xl flex justify-between items-center transition-colors svc-header" data-svc="newReservation">
+                        <span class="font-bold text-[13px] text-slate-700 svc-title">📝 신청·대기중</span>
+                        <span class="text-xs font-bold text-slate-500 svc-count" id="count-svc-newReservation">0건</span>
+                    </button>
                 </div>
+            </div>
+
+            <!-- 추가 서비스 현황 필터 -->
+            <div id="card-service" class="hidden bg-yellow-50 p-2.5 rounded-2xl shadow-sm border border-yellow-200">
                 <div id="service-filters-container" class="space-y-2"></div>
             </div>
 
-            <!-- 이번주 수령 현황 세로형 필터 -->
-            <div class="bg-indigo-50 p-4 rounded-2xl shadow-sm border border-indigo-200">
-                <div class="flex justify-between items-start mb-3">
-                    <div class="flex flex-col gap-1.5">
-                        <h3 class="text-[15px] font-black text-indigo-900 flex items-center gap-1.5">
-                            <span class="text-base">📅</span> 이번주 예약 인원
-                        </h3>
-                    </div>
-                    <button id="btn-view-all-upc" onclick="viewAllUpcoming()" class="text-[11px] font-bold text-indigo-600 bg-white hover:bg-indigo-100 px-2 py-1 rounded border border-indigo-200 shadow-sm transition-colors cursor-pointer shrink-0 mt-0.5">전체보기</button>
-                </div>
+            <!-- 이번주 수령 현황 필터 — 제목/전체보기 버튼 없이 내용만 -->
+            <div class="bg-indigo-50 p-2.5 rounded-2xl shadow-sm border border-indigo-200">
                 <div id="upcoming-filters-container" class="space-y-2"></div>
                 <div id="upc-empty-msg" class="text-center py-4 bg-white/50 rounded-xl border border-indigo-100/50 hidden mt-2">
                     <span class="text-[11px] font-bold text-indigo-400">이번 주 수령 예정건이 없어요! 🎉</span>
                 </div>
             </div>
 
-            <!-- 당일 반납 현황 세로형 필터 -->
-            <div class="bg-rose-50 p-4 rounded-2xl shadow-sm border border-rose-200">
-                <div class="flex justify-between items-start mb-3">
-                    <div class="flex flex-col gap-1.5">
-                        <h3 class="text-[15px] font-black text-rose-900 flex items-center gap-1.5">
-                            <span class="text-base">📌</span> 이번주 반납 인원
-                        </h3>
-                    </div>
-                    <button id="btn-view-all-return-upc" onclick="viewAllReturnUpcoming()" class="text-[11px] font-bold text-rose-600 bg-white hover:bg-rose-100 px-2 py-1 rounded border border-rose-200 shadow-sm transition-colors cursor-pointer shrink-0 mt-0.5">전체보기</button>
-                </div>
+            <!-- [NEW] 재고 부족 임박 (재고 5대 이하) — 제목 줄 없이 내용만 (세로폭 최소화) -->
+            <div id="low-stock-section" class="hidden bg-rose-50 p-2.5 rounded-2xl shadow-sm border border-rose-200">
+                <div id="low-stock-list" class="space-y-1.5"></div>
+            </div>
+
+            <!-- 당일 반납 현황 필터 — 제목/전체보기 버튼 없이 내용만 -->
+            <div class="bg-rose-50 p-2.5 rounded-2xl shadow-sm border border-rose-200">
                 <div id="return-upcoming-filters-container" class="space-y-2"></div>
                 <div id="return-upc-empty-msg" class="text-center py-4 bg-white/50 rounded-xl border border-rose-100/50 hidden mt-2">
                     <span class="text-[11px] font-bold text-rose-400">이번 주 반납 예정건이 없어요! 🎉</span>
@@ -665,8 +622,9 @@
                 <div class="flex flex-col gap-2 w-full">
                     <div class="w-full">
                         <span class="text-[12.5px] font-black text-slate-500 block mb-1.5">상태변경</span>
-                        <div class="grid grid-cols-5 gap-1.5 w-full">
+                        <div class="grid grid-cols-3 gap-1.5 w-full">
                             <button onclick="bulkUpdateStatus('확정')" class="text-[12px] font-bold bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-800 py-2.5 rounded-lg transition-colors shadow-sm">확정</button>
+                            <button onclick="bulkUpdateStatus('반품')" class="text-[12px] font-bold bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-700 py-2.5 rounded-lg transition-colors shadow-sm">반품</button>
                             <button onclick="bulkUpdateStatus('반납완료')" class="text-[12px] font-bold bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 py-2.5 rounded-lg transition-colors shadow-sm">반납</button>
                             <button onclick="bulkUpdateStatus('대기')" class="text-[12px] font-bold bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-800 py-2.5 rounded-lg transition-colors shadow-sm">대기</button>
                             <button onclick="bulkUpdateStatus('취소')" class="text-[12px] font-bold bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 py-2.5 rounded-lg transition-colors shadow-sm">취소</button>
@@ -784,10 +742,11 @@
                     <div class="form-section shadow-sm bg-white">
                         <div class="form-title">진행 상태</div>
                         <input type="hidden" id="edit-status-val">
-                        <div class="grid grid-cols-5 gap-2">
+                        <div class="grid grid-cols-6 gap-2">
                             <button type="button" onclick="setEditStatus('예약신청')" id="btn-status-wait" class="status-btn">신청</button>
                             <button type="button" onclick="setEditStatus('대기')" id="btn-status-hold" class="status-btn">대기</button>
                             <button type="button" onclick="setEditStatus('확정')" id="btn-status-confirm" class="status-btn">확정</button>
+                            <button type="button" onclick="setEditStatus('반품')" id="btn-status-pickup" class="status-btn">반품</button>
                             <button type="button" onclick="setEditStatus('반납완료')" id="btn-status-return" class="status-btn">반납</button>
                             <button type="button" onclick="setEditStatus('취소')" id="btn-status-cancel" class="status-btn">취소</button>
                         </div>
@@ -1968,7 +1927,7 @@
 
 
         const MODEL_LIST = ['23U', '24U', '25U', '26U', '17P', '17PM'];
-        const STATUS_PRIORITY = { '예약신청': 1, '대기': 2, '확정': 3, '반납완료': 4, '취소': 5 };
+        const STATUS_PRIORITY = { '예약신청': 1, '대기': 2, '확정': 3, '반품': 4, '반납완료': 5, '취소': 6 };
 
         function isWithinUpcomingBusinessDays(startDateStr, maxDays) {
             if (!startDateStr || !startDateStr.includes('-')) return false;
@@ -3992,7 +3951,7 @@
                 delivery: { 'all': 0, '택배': 0, '공연장': 0, '사무실': 0 },
                 deliverySub: { 'all': 0, 'remaining': 0, 'pickedup': 0 },
                 return: { 'all': 0, '택배': 0, '당일': 0, '사무실': 0 },
-                status: { 'all': 0, '예약신청': 0, '대기': 0, '확정': 0, '반납완료': 0, '취소': 0 },
+                status: { 'all': 0, '예약신청': 0, '대기': 0, '확정': 0, '반품': 0, '반납완료': 0, '취소': 0 },
                 upcoming: {
                     '퀵': { 'all': 0, battery: 0, dates: {} },
                     '사무실': { 'all': 0, battery: 0, dates: {} },
@@ -4158,7 +4117,7 @@
                 }
 
                 const isReturnUpcoming = isWithinReturnBusinessDays(endDateStr, 7);
-                const isReturnUpcomingTarget = isReturnUpcoming && !status.includes('반납') && !status.includes('취소');
+                const isReturnUpcomingTarget = isReturnUpcoming && !status.includes('반납') && !status.includes('반품') && !status.includes('취소');
 
                 let normReturnWay = null;
                 if (returnWay.includes('택배')) normReturnWay = '택배';
@@ -5729,7 +5688,7 @@
             
             allData.forEach(item => {
                 const statusStr = String(item.status || '');
-                if (statusStr.includes('취소') || statusStr.includes('반납')) return; 
+                if (statusStr.includes('취소') || statusStr.includes('반납') || statusStr.includes('반품')) return;
                 
                 const cleanName = String(item.name || '').replace(/\s+/g, '');
                 if (cleanName.length >= 2) {
@@ -5760,19 +5719,21 @@
                 let accentColor = 'bg-slate-300';
                 if(item.status === '예약신청') accentColor = 'bg-orange-400';
                 else if(item.status === '확정') accentColor = 'bg-blue-600';
+                else if(item.status === '반품') accentColor = 'bg-orange-600';
                 else if(item.status === '반납완료') accentColor = 'bg-slate-500';
                 else if(item.status === '대기') accentColor = 'bg-purple-500';
                 else if(item.status === '취소') accentColor = 'bg-red-500';
 
                 let badgeClass = 'status-wait', badgeText = '신청';
                 if(item.status === '확정') { badgeClass = 'status-confirm'; badgeText = '확정'; }
+                else if(item.status === '반품') { badgeClass = 'status-pickup'; badgeText = '반품'; }
                 else if(item.status === '반납완료') { badgeClass = 'status-return'; badgeText = '반납'; }
                 else if(item.status === '대기') { badgeClass = 'status-hold'; badgeText = '대기'; }
                 else if(item.status === '취소') { badgeClass = 'status-cancel'; badgeText = '취소'; }
 
                 const cleanName = String(item.name || '').replace(/\s+/g, '');
                 const itemStatusStr = String(item.status || '');
-                const isExcludedFromDup = itemStatusStr.includes('취소') || itemStatusStr.includes('반납');
+                const isExcludedFromDup = itemStatusStr.includes('취소') || itemStatusStr.includes('반납') || itemStatusStr.includes('반품');
                 
                 let duplicateBadgeHtml = '';
                 if (!isExcludedFromDup && cleanName.length >= 2) {
@@ -6230,15 +6191,16 @@
 
         function applyEditStatus(status) {
             document.getElementById('edit-status-val').value = status;
-            ['wait','confirm','return','cancel','hold'].forEach(k => {
+            ['wait','confirm','pickup','return','cancel','hold'].forEach(k => {
                 const btn = document.getElementById(`btn-status-${k}`);
                 if(btn) { btn.className = "status-btn"; btn.style = ""; }
             });
-            const map = { '예약신청':'wait', '확정':'confirm', '반납완료':'return', '취소':'cancel', '대기':'hold' };
+            const map = { '예약신청':'wait', '확정':'confirm', '반품':'pickup', '반납완료':'return', '취소':'cancel', '대기':'hold' };
             const activeBtn = document.getElementById(`btn-status-${map[status]}`);
             if(activeBtn) {
                 if(status === '예약신청') { activeBtn.style.backgroundColor = '#FFF7ED'; activeBtn.style.color = '#C2410C'; activeBtn.style.borderColor = '#FDBA74'; }
                 else if(status === '확정') { activeBtn.style.backgroundColor = '#0064FF'; activeBtn.style.color = 'white'; activeBtn.style.borderColor = '#0064FF'; }
+                else if(status === '반품') { activeBtn.style.backgroundColor = '#EA580C'; activeBtn.style.color = 'white'; activeBtn.style.borderColor = '#EA580C'; }
                 else if(status === '반납완료') { activeBtn.style.backgroundColor = '#4B5563'; activeBtn.style.color = 'white'; activeBtn.style.borderColor = '#4B5563'; }
                 else if(status === '취소') { activeBtn.style.backgroundColor = '#DC2626'; activeBtn.style.color = 'white'; activeBtn.style.borderColor = '#DC2626'; }
                 else if(status === '대기') { activeBtn.style.backgroundColor = '#F5F3FF'; activeBtn.style.color = '#7C3AED'; activeBtn.style.borderColor = '#DDD6FE'; }
@@ -7441,15 +7403,16 @@
         /* ---- 상태 버튼 ---- */
         function setAddStatus(val) {
             document.getElementById('add-status-val').value = val;
-            ['wait','hold','confirm','return','cancel'].forEach(function(k){
+            ['wait','hold','confirm','pickup','return','cancel'].forEach(function(k){
                 var b=document.getElementById('add-btn-status-'+k);
                 if(b){ b.style.backgroundColor=''; b.style.color=''; b.style.borderColor=''; }
             });
-            var map = { '예약신청':'wait','대기':'hold','확정':'confirm','반납완료':'return','취소':'cancel' };
+            var map = { '예약신청':'wait','대기':'hold','확정':'confirm','반품':'pickup','반납완료':'return','취소':'cancel' };
             var activeBtn = document.getElementById('add-btn-status-'+(map[val]||''));
             if(activeBtn){
                 if(val==='예약신청'){ activeBtn.style.backgroundColor='#FFF7ED'; activeBtn.style.color='#C2410C'; activeBtn.style.borderColor='#FDBA74'; }
                 else if(val==='확정'){  activeBtn.style.backgroundColor='#0064FF'; activeBtn.style.color='white'; activeBtn.style.borderColor='#0064FF'; }
+                else if(val==='반품'){  activeBtn.style.backgroundColor='#EA580C'; activeBtn.style.color='white'; activeBtn.style.borderColor='#EA580C'; }
                 else if(val==='반납완료'){ activeBtn.style.backgroundColor='#4B5563'; activeBtn.style.color='white'; activeBtn.style.borderColor='#4B5563'; }
                 else if(val==='취소'){  activeBtn.style.backgroundColor='#DC2626'; activeBtn.style.color='white'; activeBtn.style.borderColor='#DC2626'; }
                 else if(val==='대기'){  activeBtn.style.backgroundColor='#F5F3FF'; activeBtn.style.color='#7C3AED'; activeBtn.style.borderColor='#DDD6FE'; }
@@ -7624,10 +7587,11 @@
                 <div class="form-section bg-white shadow-sm">
                     <div class="form-title">진행 상태</div>
                     <input type="hidden" id="add-status-val" value="예약신청">
-                    <div class="grid grid-cols-5 gap-2">
+                    <div class="grid grid-cols-6 gap-2">
                         <button type="button" onclick="setAddStatus('예약신청')" id="add-btn-status-wait" class="status-btn active">신청</button>
                         <button type="button" onclick="setAddStatus('대기')"     id="add-btn-status-hold"    class="status-btn">대기</button>
                         <button type="button" onclick="setAddStatus('확정')"     id="add-btn-status-confirm" class="status-btn">확정</button>
+                        <button type="button" onclick="setAddStatus('반품')"     id="add-btn-status-pickup"  class="status-btn">반품</button>
                         <button type="button" onclick="setAddStatus('반납완료')" id="add-btn-status-return"  class="status-btn">반납</button>
                         <button type="button" onclick="setAddStatus('취소')"     id="add-btn-status-cancel"  class="status-btn">취소</button>
                     </div>
