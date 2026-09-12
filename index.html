@@ -35,12 +35,16 @@
             --border: #CBD5E1;   
         }
 
-        body { 
+        body {
             font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, sans-serif;
-            background-color: var(--bg-color); 
+            background-color: var(--bg-color);
             color: var(--text-main);
-            letter-spacing: -0.02em; 
-            overflow-y: scroll; 
+            letter-spacing: -0.02em;
+            overflow-y: scroll;
+            /* [FIX] 상단 카드 영역이 접히면서 header 높이가 줄어들 때, 브라우저의 스크롤 앵커링이 화면이
+               튀지 않도록 scrollY를 자동으로 보정(0 쪽으로 되돌림)하는데, 이게 우리 접힘/펼침 판정을
+               다시 뒤집어서 접혔다 펼쳐졌다를 반복하며 떠는 현상의 원인이었습니다. */
+            overflow-anchor: none;
         }
 
         .font-tnum { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; letter-spacing: 0; }
@@ -1075,14 +1079,17 @@
 
         // [NEW] 아래 예약 목록을 스크롤하면 상단 현황 카드를 자연스럽게 접어서 화면을 넓게 쓰고,
         // 맨 위로 돌아오면 다시 펼침
+        // [FIX] 접힘/펼침 기준선이 하나(10px)라서, 스크롤이 그 값 근처에서 살짝만 흔들려도(터치 스크롤 특성상
+        // scrollY가 딱 고정되지 않고 미세하게 오르내림) 계속 다시 판정되며 카드가 떨리듯 깜빡였습니다.
+        // 접힘 기준(살짝만 내려도 바로 숨김)과 펼침 기준(완전히 맨 위로 돌아왔을 때만)을 다르게 둬서 방지합니다.
         let hdrCardsCollapsed = false;
         window.addEventListener('scroll', () => {
             const cardScroll = document.querySelector('.hdr-card-scroll');
             if (!cardScroll) return;
-            if (window.scrollY > 10 && !hdrCardsCollapsed) {
+            if (window.scrollY > 2 && !hdrCardsCollapsed) {
                 cardScroll.classList.add('hdr-card-collapsed');
                 hdrCardsCollapsed = true;
-            } else if (window.scrollY <= 10 && hdrCardsCollapsed) {
+            } else if (window.scrollY <= 0 && hdrCardsCollapsed) {
                 cardScroll.classList.remove('hdr-card-collapsed');
                 hdrCardsCollapsed = false;
             }
