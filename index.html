@@ -2331,6 +2331,55 @@
             // 여기서 바로 재계산해서 동기화 (재고 부족 임박/설정 화면 미리보기와 동일하게 즉시 반영)
             syncStockClosureToHomepage();
         }
+        // [NEW] 재고 부족 임박에서 특정 날짜(모델)의 잔여 수량을 관리자가 직접 조정할 수 있게 하는 보정값.
+        // 보유 대수(stock_counts)를 그대로 두고, 날짜별로 "+N/-N"만큼 더해서 계산에 반영합니다.
+        function getStockAdjustments(model) {
+            const all = (settingsDraft && settingsDraft.stock_manual_adjust) || {};
+            return all[model] || {};
+        }
+        // 잔여 수량을 newRemaining으로 맞추기 위해 필요한 보정값을 날짜 구간 전체에 적용
+        // [FIX] settingsDraft에만 담아두면 "저장" 버튼을 누르기 전까지는 서버에 반영되지 않아서,
+        // 새로고침하면 조정한 내용이 사라지고 원래 재고 수량 기준으로 되돌아가던 버그가 있었습니다.
+        // stock_blocked_schedule처럼 이 값도 즉시 DB에 직접 저장해서 새로고침해도 유지되게 합니다.
+        async function applyStockAdjustment(model, startKey, endKey, newRemaining) {
+            const start = parseDateKeyToDate(startKey);
+            const end = parseDateKeyToDate(endKey);
+            if (!start || !end || !Number.isFinite(newRemaining)) return;
+
+            const stock = getStockCounts();
+            const occupancy = getInventoryOccupancy();
+            const ranges = occupancy[model] || [];
+            const total = stock[model];
+            const allAdjust = cloneSettings(settingsDraft.stock_manual_adjust || {});
+            const modelAdjust = { ...(allAdjust[model] || {}) };
+
+            const cursor = new Date(start);
+            while (cursor <= end) {
+                const key = settingsDateKey(cursor.getFullYear(), cursor.getMonth() + 1, cursor.getDate());
+                const used = ranges.filter(r => cursor >= r.start && cursor <= r.end).length;
+                // remaining = total + adjust - used  =>  adjust = newRemaining - total + used
+                const delta = newRemaining - total + used;
+                if (delta === 0) delete modelAdjust[key]; else modelAdjust[key] = delta;
+                cursor.setDate(cursor.getDate() + 1);
+            }
+            allAdjust[model] = modelAdjust;
+
+            const { error } = await sb.from('admin_settings').upsert(
+                { key: 'stock_manual_adjust', value: allAdjust, updated_at: new Date().toISOString() },
+                { onConflict: 'key' }
+            );
+            if (error) { console.error('재고 수량 조정 저장 실패:', error); showToast('저장 실패: ' + (error.message || '')); return; }
+
+            adminSettings.stock_manual_adjust = allAdjust;
+            // [FIX] setDraft()는 "저장 안 됨" 상태로 표시하는데, 이 값은 위에서 이미 DB에 바로 저장했으므로
+            // settingsDraft만 갱신하고 관련 화면만 다시 그립니다 (저장 버튼이 불필요하게 활성화되는 것 방지)
+            settingsDraft.stock_manual_adjust = allAdjust;
+            renderStockInputs();
+            renderInventoryTable();
+            renderLowStockAlerts();
+            // [NEW] 재고 수량 조정 즉시 홈페이지 마감 여부에도 반영
+            syncStockClosureToHomepage();
+        }
         function getModelBucket(modelStr) {
             const m = String(modelStr || '').toUpperCase();
             for (const model of STOCK_MODEL_ORDER) {
@@ -2423,7 +2472,8 @@
                 const cells = MODEL_LIST.map(m => {
                     const total = stock[m];
                     const used = occupancy[m].filter(r => d >= r.start && d <= r.end).length;
-                    const avail = total - used;
+                    const dayKey = settingsDateKey(d.getFullYear(), d.getMonth() + 1, d.getDate());
+                    const avail = total + (getStockAdjustments(m)[dayKey] || 0) - used;
                     let cls = 'text-emerald-700';
                     if (avail <= 0) cls = 'text-rose-600 font-black';
                     else if (avail <= 3) cls = 'text-amber-600 font-bold';
@@ -2462,15 +2512,17 @@
         // 택배/퀵처럼 미리 발송해야 하는 예약이 이미 그 전날부터 재고를 차지하고 있었다면(리드타임),
         // 구간의 시작일을 그 예약이 실제로 재고를 빼간 날짜까지 앞당기고, 그러면서 겹치거나 붙는 구간은 합칩니다.
         // (예: 9/13~14가 기준치 이하여도, 그 기간과 겹치는 예약이 택배 수령이라 9/11부터 이미 재고를 썼다면 9/11부터로 확장)
-        function findCriticalRanges(ranges, total, threshold, lookaheadDays) {
+        function findCriticalRanges(ranges, total, threshold, lookaheadDays, adjustments) {
             const today = new Date(); today.setHours(0, 0, 0, 0);
+            const adjust = adjustments || {};
 
             const rawRuns = [];
             let run = null;
             for (let i = 0; i < lookaheadDays; i++) {
                 const d = new Date(today); d.setDate(d.getDate() + i);
                 const used = ranges.filter(r => d >= r.start && d <= r.end).length;
-                const remaining = total - used;
+                const dayKey = settingsDateKey(d.getFullYear(), d.getMonth() + 1, d.getDate());
+                const remaining = total + (adjust[dayKey] || 0) - used;
                 if (remaining <= threshold) {
                     if (run) run.end = d; else run = { start: d, end: d };
                 } else if (run) {
@@ -2510,7 +2562,8 @@
                 const total = stock[model];
                 const threshold = total <= LOW_STOCK_TIGHT_STOCK_MAX ? LOW_STOCK_THRESHOLD_TIGHT : LOW_STOCK_THRESHOLD;
                 const ranges = occupancy[model];
-                const merged = findCriticalRanges(ranges, total, threshold, LOW_STOCK_LOOKAHEAD_DAYS);
+                const adjust = getStockAdjustments(model);
+                const merged = findCriticalRanges(ranges, total, threshold, LOW_STOCK_LOOKAHEAD_DAYS, adjust);
 
                 // 합쳐진 구간 안에서 실제로 가장 심각했던(최소) 잔여 대수를 다시 계산해 대표값으로 사용
                 merged.forEach(r => {
@@ -2518,7 +2571,8 @@
                     const cursor = new Date(r.start);
                     while (cursor <= r.end) {
                         const used = ranges.filter(res => cursor >= res.start && cursor <= res.end).length;
-                        remaining = Math.min(remaining, total - used);
+                        const dayKey = settingsDateKey(cursor.getFullYear(), cursor.getMonth() + 1, cursor.getDate());
+                        remaining = Math.min(remaining, total + (adjust[dayKey] || 0) - used);
                         cursor.setDate(cursor.getDate() + 1);
                     }
                     alerts.push({ model, remaining, start: r.start, end: r.end });
@@ -2542,7 +2596,8 @@
             MODEL_LIST.forEach(model => {
                 const total = stock[model];
                 const ranges = occupancy[model];
-                const merged = findCriticalRanges(ranges, total, 0, LOW_STOCK_LOOKAHEAD_DAYS); // 완전 품절(0대 이하)만 마감 처리
+                const adjust = getStockAdjustments(model);
+                const merged = findCriticalRanges(ranges, total, 0, LOW_STOCK_LOOKAHEAD_DAYS, adjust); // 완전 품절(0대 이하)만 마감 처리
 
                 const dateKeys = [];
                 merged.forEach(r => {
@@ -2602,27 +2657,54 @@
                     : `${fmtMonthDay(a.start)}~${fmtMonthDay(a.end)}`;
                 // [FIX] Tailwind 클래스명(bg-rose-700 등)이 이 프로젝트의 사전 빌드 CSS에 없으면 배경이 그냥 흰색이 되어
                 // 흰 글씨가 안 보이는 문제가 있었습니다. 그래서 클래스 대신 인라인 style로 색을 직접 지정합니다.
-                let badgeText, badgeColor;
-                if (a.remaining < 0) { badgeText = `잔여 ${a.remaining}대`; badgeColor = '#9F1239'; }      // 진한 적갈색 (초과예약)
-                else if (a.remaining === 0) { badgeText = '품절'; badgeColor = '#DC2626'; }                  // 빨강 (품절)
-                else { badgeText = `잔여 ${a.remaining}대`; badgeColor = '#2563EB'; }                        // 파랑 (부족 임박)
+                // [NEW] 품절 계열은 주황~빨강 사이 파스텔톤, 잔여 계열은 하늘색~파랑 사이 파스텔톤으로 표시
+                let badgeText, badgeColor, badgeTextColor;
+                if (a.remaining < 0) { badgeText = `잔여 ${a.remaining}대`; badgeColor = '#FEE2E2'; badgeTextColor = '#B91C1C'; }   // 연한 빨강 (초과예약)
+                else if (a.remaining === 0) { badgeText = '품절'; badgeColor = '#FFEDD5'; badgeTextColor = '#C2410C'; }              // 연한 주황 (품절)
+                else { badgeText = `잔여 ${a.remaining}대`; badgeColor = '#E0F2FE'; badgeTextColor = '#1D4ED8'; }                    // 연한 하늘색 (부족 임박)
 
                 const startKey = fmtDateKey(a.start), endKey = fmtDateKey(a.end);
                 const isActive = activeLowStockFilter && activeLowStockFilter.model === a.model &&
                     activeLowStockFilter.start.getTime() === a.start.getTime() && activeLowStockFilter.end.getTime() === a.end.getTime();
                 const ringCls = isActive ? 'ring-2 ring-indigo-500 border-indigo-300' : 'border-rose-100';
 
-                // [NEW] 클릭하면 이 기간에 해당 모델 재고를 차지하고 있는 예약만 메인 목록에 필터링해서 보여줌
-                return `<button type="button" onclick="filterByLowStock('${a.model}', '${startKey}', '${endKey}')" class="w-full flex items-center justify-between gap-2 bg-white border ${ringCls} rounded-xl px-3 py-2.5 shadow-sm active:bg-rose-50 transition-colors text-left">
-                    <div class="flex items-center gap-2 min-w-0">
+                // [NEW] 왼쪽(날짜·모델)을 누르면 이 기간에 재고를 차지하는 예약만 필터링 + 마감 팝업을 보여주고,
+                // 오른쪽 잔여 수량 배지를 누르면 잔여 수량을 직접 조정하는 팝업이 열립니다.
+                return `<div class="w-full flex items-center gap-2 bg-white border ${ringCls} rounded-xl px-3 py-2.5 shadow-sm">
+                    <button type="button" onclick="filterByLowStock('${a.model}', '${startKey}', '${endKey}')" class="flex items-center gap-2 min-w-0 flex-1 text-left active:opacity-70 transition-opacity">
                         <span class="text-[11px] font-black text-slate-500 font-tnum shrink-0">${dateLabel}</span>
                         <span class="text-[13px] font-black text-slate-800 shrink-0">${a.model}</span>
-                    </div>
-                    <span class="text-[11px] font-black text-white px-2 py-1 rounded-lg shrink-0 whitespace-nowrap" style="background-color:${badgeColor}">${badgeText}</span>
-                </button>`;
+                    </button>
+                    <button type="button" onclick="openStockAdjustPopup('${a.model}', '${startKey}', '${endKey}', ${a.remaining})" class="text-[11px] font-black px-2 py-1 rounded-lg shrink-0 whitespace-nowrap active:opacity-80 transition-opacity" style="background-color:${badgeColor}; color:${badgeTextColor}">${badgeText} ✏️</button>
+                </div>`;
             }).join('');
         }
         function fmtDateKey(d) { return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; }
+        // [NEW] 재고 부족 임박 배지 클릭: 해당 기간의 잔여 수량을 직접 입력해서 조정하는 팝업
+        function openStockAdjustPopup(model, startKey, endKey, currentRemaining) {
+            const start = parseDateKeyToDate(startKey), end = parseDateKeyToDate(endKey);
+            if (!start || !end) return;
+            const dateLabel = start.getTime() === end.getTime() ? fmtMonthDay(start) : `${fmtMonthDay(start)}~${fmtMonthDay(end)}`;
+            const html = `
+                <div class="mb-2 text-left">
+                    <label class="block text-xs font-bold text-slate-500 mb-1.5">새 잔여 수량 (이 기간 전체에 적용)</label>
+                    <input id="stock-adjust-input" type="number" value="${currentRemaining}" class="w-full h-12 rounded-xl border border-slate-200 text-center font-black text-lg outline-none focus:border-indigo-400" onkeydown="if(event.key==='Enter'){document.getElementById('stock-adjust-confirm-btn').click();}">
+                </div>
+                <div class="flex gap-3 mt-2">
+                    <button onclick="closeAppModal()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3.5 rounded-xl text-base transition-colors">취소</button>
+                    <button id="stock-adjust-confirm-btn" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl text-base transition-all">적용</button>
+                </div>
+            `;
+            setupModal(`${model} 잔여 수량 조정`, `${dateLabel} 기간의 재고 계산에 보정값을 적용합니다. 예약이 늘거나 취소되면 이 값을 기준으로 다시 계산돼요.`, '📦', html);
+            document.getElementById('stock-adjust-confirm-btn').onclick = async () => {
+                const val = parseInt(document.getElementById('stock-adjust-input').value, 10);
+                if (!Number.isFinite(val)) { showToast('숫자를 입력해주세요.'); return; }
+                closeAppModal();
+                await applyStockAdjustment(model, startKey, endKey, val);
+                showToast(`${model} · ${dateLabel} 잔여 수량을 ${val}대로 조정했어요.`);
+            };
+            setTimeout(() => { const inp = document.getElementById('stock-adjust-input'); if (inp) { inp.focus(); inp.select(); } }, 50);
+        }
         // [NEW] 재고 부족 임박 항목 클릭: 다른 필터를 모두 초기화하고 그 기간에 해당 모델 재고를 차지한 예약만 표시
         function filterByLowStock(model, startKey, endKey) {
             const start = parseDateKeyToDate(startKey);
