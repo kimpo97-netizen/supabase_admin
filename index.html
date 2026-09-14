@@ -4974,6 +4974,7 @@
             const lockersToRelease = []; // [NEW] 반납완료로 바뀌는 건 중 물품보관함이 배정되어 있던 목록
             const waitingNotifyTargets = []; // [NEW] '대기'로 새로 바뀌는 건 중 알림톡 보낼 대상(phone) 모음
             const reviewNotifyTargets = []; // [NEW] '반납완료'로 새로 바뀌는 건 중 리뷰요청 알림톡 보낼 대상 모음
+            const bookingConfirmedNotifyTargets = []; // [NEW] '확정'으로 새로 바뀌는 실제 예약건(신청건 제외) 중 예약확정 안내 발송 대상 모음
 
             selectedRows.forEach(rowId => {
                 const targetIndex = allData.findIndex(item => String(item.row) === String(rowId));
@@ -4991,6 +4992,14 @@
                     // [NEW] 반납/반납완료로 새로 바뀌는 건 → 리뷰 요청 알림톡 발송 대상으로 기록
                     if ((newStatus === '반납' || newStatus === '반납완료') && prevStatus !== '반납' && prevStatus !== '반납완료') {
                         reviewNotifyTargets.push({ phone: item.phone, name: item.name, review: item.review });
+                    }
+                    // [NEW] 확정으로 새로 바뀌는 실제 예약건(예약관리 신청건 제외) → 예약확정 안내 알림톡 발송 대상으로 기록
+                    if (newStatus === '확정' && prevStatus !== '확정' && (!category || category === '예약신청')) {
+                        bookingConfirmedNotifyTargets.push({
+                            phone: item.phone, name: item.name, model: item.model, scheduleName: item.scheduleName,
+                            review: item.review, startDate: item.startDate, delivery: item.delivery,
+                            endDate: item.endDate, returnWay: item.returnWay
+                        });
                     }
                     // [NEW] 예약신청(원예약)이 아닌 신청건이 '확정'으로 바뀌면 자동 휴지통 이동 대상으로 기록
                     if (newStatus === '확정' && prevStatus !== '확정' && category && category !== '예약신청') {
@@ -5078,6 +5087,20 @@
                     if (reviewKey) {
                         sendAdminAlimtalk(reviewKey, phone, reviewKey === 'review_none' ? {} : { '#{이름}': name || '' });
                     }
+                }
+                // [NEW] 저장 성공 후에만 예약확정 안내 알림톡 발송 (일괄변경)
+                for (const t of bookingConfirmedNotifyTargets) {
+                    sendAdminAlimtalk('booking_confirmed', t.phone, {
+                        '#{이름}': t.name || '',
+                        '#{연락처}': t.phone || '',
+                        '#{모델}': t.model || '',
+                        '#{일정명}': t.scheduleName || '',
+                        '#{리뷰}': t.review || '',
+                        '#{수령일}': t.startDate || '',
+                        '#{수령방법}': t.delivery || '',
+                        '#{반납일}': t.endDate || '',
+                        '#{반납방법}': t.returnWay || ''
+                    });
                 }
             } catch (err) {
                 console.error("일괄 저장 실패", err);
@@ -7100,6 +7123,22 @@
                         if (reviewKey) {
                             sendAdminAlimtalk(reviewKey, payload.phone, reviewKey === 'review_none' ? {} : { '#{이름}': payload.name || '' });
                         }
+                    }
+
+                    // 확정으로 새로 바뀌면(실제 예약건만, 예약관리의 신청건은 제외) → 예약 확정 안내
+                    const isRealReservation = !originalData.category || originalData.category === '예약신청';
+                    if (newStatus === '확정' && oldStatus !== '확정' && isRealReservation) {
+                        sendAdminAlimtalk('booking_confirmed', payload.phone, {
+                            '#{이름}': payload.name || '',
+                            '#{연락처}': payload.phone || '',
+                            '#{모델}': payload.model || '',
+                            '#{일정명}': payload.scheduleName || '',
+                            '#{리뷰}': payload.review || '',
+                            '#{수령일}': payload.startDate || '',
+                            '#{수령방법}': payload.delivery || '',
+                            '#{반납일}': payload.endDate || '',
+                            '#{반납방법}': payload.returnWay || ''
+                        });
                     }
                 }
             })
