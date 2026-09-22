@@ -977,32 +977,6 @@
         </div>
     </div>
 
-    <!-- 주소변경 확정 시 수령 방법 선택 모달 -->
-    <div id="address-confirm-delivery-modal" class="fixed inset-0 hidden flex items-center justify-center p-6" style="z-index: 9999;">
-        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onclick="cancelAddressConfirmDelivery()"></div>
-        <div class="bg-white rounded-[24px] p-6 w-full max-w-md relative z-10 shadow-2xl flex flex-col transform transition-all max-h-[85vh]">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-black text-slate-900 flex items-center gap-2">📮 주소변경 확정 - 수령 방법</h3>
-                <button onclick="cancelAddressConfirmDelivery()" class="text-slate-400 hover:text-slate-600 p-1">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                </button>
-            </div>
-            <p class="text-[13px] text-slate-500 font-medium mb-3 leading-relaxed break-keep">
-                주소변경을 확정하면서 수령 방법도 함께 정해주세요. <strong>택배</strong>, <strong>퀵</strong>, <strong>사무실</strong> 중에서 골라주세요.
-            </p>
-            <div class="flex gap-2 mb-4">
-                <button type="button" onclick="applyAddressConfirmDeliveryToAll('택배수령')" class="flex-1 text-[13px] font-bold bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-800 py-2.5 rounded-lg transition-colors">📦 전체 택배로</button>
-                <button type="button" onclick="applyAddressConfirmDeliveryToAll('퀵수령')" class="flex-1 text-[13px] font-bold bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-600 py-2.5 rounded-lg transition-colors">⚡ 전체 퀵으로</button>
-                <button type="button" onclick="applyAddressConfirmDeliveryToAll('사무실수령')" class="flex-1 text-[13px] font-bold bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 py-2.5 rounded-lg transition-colors">🏢 전체 사무실로</button>
-            </div>
-            <div class="overflow-y-auto flex-1 bg-slate-50 rounded-xl border border-slate-200 p-2.5 mb-6 space-y-2" id="address-confirm-delivery-list">
-            </div>
-            <div class="flex gap-3 mt-auto pt-2">
-                <button onclick="cancelAddressConfirmDelivery()" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3.5 rounded-xl transition-colors">취소</button>
-                <button onclick="confirmAddressConfirmDelivery()" id="address-confirm-delivery-save-btn" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition-colors shadow-sm">확정하기</button>
-            </div>
-        </div>
-    </div>
 
     <!-- 수령일 달력 모달 -->
     <div id="calendar-modal-root">
@@ -2252,7 +2226,8 @@
                         if (origIdx === -1) { console.warn('주소변경 자동확정: origin_ref와 일치하는 원예약을 찾지 못했습니다.', ref); continue; }
                         allData[origIdx].address = task.address;
                         allData[origIdx].zipCode = task.zipCode;
-                        const { error } = await sb.from('reservations').update({ address: task.address, zipcode: task.zipCode }).eq('id', Number(allData[origIdx].row));
+                        allData[origIdx].delivery = '택배수령';
+                        const { error } = await sb.from('reservations').update({ address: task.address, zipcode: task.zipCode, delivery: '택배수령' }).eq('id', Number(allData[origIdx].row));
                         if (error) console.error('원예약 주소 자동변경 실패:', error);
                     } catch (e) { console.error('origin_ref 파싱 실패:', e); }
                 }
@@ -4991,17 +4966,7 @@
         async function bulkUpdateStatus(newStatus) {
             if (selectedRows.length === 0) return;
 
-            if (newStatus === '확정') {
-                const addressItems = selectedRows
-                    .map(rowId => allData.find(i => String(i.row) === String(rowId)))
-                    .filter(item => item && item.status !== '확정' && String(item.category || '').includes('주소변경'));
-                if (addressItems.length > 0) {
-                    openAddressConfirmDeliveryModal(addressItems, (choiceMap) => {
-                        proceedBulkUpdateStatus(newStatus, choiceMap);
-                    });
-                    return;
-                }
-            }
+            // [NEW] 주소변경신청 확정 시 수령방법은 항상 '택배수령'으로 고정되므로, 더 이상 배송지 확인 모달을 띄우지 않습니다.
 
             if (newStatus === '반납완료') {
                 const today = new Date(); today.setHours(0,0,0,0);
@@ -5072,7 +5037,8 @@
                         if (String(category || '').includes('연장')) {
                             originSyncTasks.push({ origin_ref: item.origin_ref, type: 'extend', endDate: item.endDate });
                         } else if (String(category || '').includes('주소변경')) {
-                            originSyncTasks.push({ origin_ref: item.origin_ref, type: 'address', address: item.address, zipCode: item.zipCode, delivery: deliveryChoiceMap[String(rowId)] });
+                            // [NEW] 주소변경신청이 확정되면 원예약의 수령방법은 항상 '택배수령'으로 고정
+                            originSyncTasks.push({ origin_ref: item.origin_ref, type: 'address', address: item.address, zipCode: item.zipCode, delivery: '택배수령' });
                         } else if (String(category || '') === '변경신청') {
                             // [NEW] 대여모델만 바꾸는 신청건 — 원예약의 model을 바꾸지 않으면 재고 계산이 옛 모델 기준으로 남아 새 모델 품절이 반영되지 않음
                             originSyncTasks.push({ origin_ref: item.origin_ref, type: 'model', model: item.model });
@@ -5608,68 +5574,6 @@
             } finally {
                 btn.innerText = '저장'; btn.disabled = false;
             }
-        }
-
-        // ===== 주소변경 확정 시 수령 방법 선택 팝업 =====
-        let tempAddressConfirmChoices = {};
-        let addressConfirmPendingItems = [];
-        let addressConfirmOnResolve = null;
-        const ADDRESS_CONFIRM_DELIVERY_METHODS = ['택배수령', '퀵수령', '사무실수령'];
-
-        function openAddressConfirmDeliveryModal(items, onResolve) {
-            addressConfirmPendingItems = items;
-            addressConfirmOnResolve = onResolve;
-            tempAddressConfirmChoices = {};
-            items.forEach(item => {
-                const guess = guessDeliveryMethod(item.delivery);
-                tempAddressConfirmChoices[String(item.row)] = ADDRESS_CONFIRM_DELIVERY_METHODS.includes(guess) ? guess : '택배수령';
-            });
-            renderAddressConfirmDeliveryList();
-            document.getElementById('address-confirm-delivery-modal').classList.remove('hidden');
-        }
-
-        function cancelAddressConfirmDelivery() {
-            document.getElementById('address-confirm-delivery-modal').classList.add('hidden');
-            addressConfirmPendingItems = [];
-            addressConfirmOnResolve = null;
-        }
-
-        function renderAddressConfirmDeliveryList() {
-            const listEl = document.getElementById('address-confirm-delivery-list');
-            listEl.innerHTML = '';
-            addressConfirmPendingItems.forEach(item => {
-                const rowId = String(item.row);
-                const choice = tempAddressConfirmChoices[rowId] || '택배수령';
-                const card = document.createElement('div');
-                card.className = "flex items-center justify-between p-3 bg-white border border-slate-100 rounded-xl shadow-sm gap-2";
-                card.innerHTML = `
-                    <div class="flex-1 overflow-hidden min-w-0">
-                        <div class="text-[13px] font-black text-slate-800 truncate">${item.name || '-'} <span class="text-slate-400 font-bold text-[11px]">(${item.phone || '-'})</span></div>
-                        <div class="text-[11px] text-rose-600 font-bold mt-0.5 truncate">→ ${item.address || '-'}</div>
-                    </div>
-                    <div class="shrink-0 flex items-center gap-1.5">${renderDeliveryChoiceButtons(rowId, ADDRESS_CONFIRM_DELIVERY_METHODS, choice, 'selectAddressConfirmChoice')}</div>
-                `;
-                listEl.appendChild(card);
-            });
-        }
-
-        function selectAddressConfirmChoice(rowId, method) {
-            tempAddressConfirmChoices[rowId] = method;
-            renderAddressConfirmDeliveryList();
-        }
-
-        function applyAddressConfirmDeliveryToAll(method) {
-            addressConfirmPendingItems.forEach(item => { tempAddressConfirmChoices[String(item.row)] = method; });
-            renderAddressConfirmDeliveryList();
-        }
-
-        function confirmAddressConfirmDelivery() {
-            const choiceMap = { ...tempAddressConfirmChoices };
-            const resolve = addressConfirmOnResolve;
-            document.getElementById('address-confirm-delivery-modal').classList.add('hidden');
-            addressConfirmPendingItems = [];
-            addressConfirmOnResolve = null;
-            if (resolve) resolve(choiceMap);
         }
 
         async function bulkExtendRental() {
@@ -6978,26 +6882,8 @@
             document.querySelectorAll('.model-select-chip').forEach(btn => btn.classList.toggle('active', btn.dataset.val === modelName));
         }
 
-        let pendingSingleAddressDelivery = null;
-        let addressConfirmGateBypassRowId = null;
-
         async function submitUpdate(e) {
             if(e) e.preventDefault();
-
-            const gateRowId = document.getElementById('edit-row').value;
-            const gateNewStatus = document.getElementById('edit-status-val').value;
-            const gateTargetItem = allData.find(item => String(item.row) === String(gateRowId));
-            const needsAddressGate = gateTargetItem && String(gateTargetItem.category || '').includes('주소변경') &&
-                gateNewStatus === '확정' && gateTargetItem.status !== '확정';
-            if (needsAddressGate && addressConfirmGateBypassRowId !== gateRowId) {
-                openAddressConfirmDeliveryModal([gateTargetItem], (choiceMap) => {
-                    pendingSingleAddressDelivery = choiceMap[String(gateRowId)];
-                    addressConfirmGateBypassRowId = gateRowId;
-                    submitUpdate();
-                });
-                return;
-            }
-            addressConfirmGateBypassRowId = null;
 
             const btn = document.getElementById('save-btn');
             btn.innerText = '저장 중...'; btn.disabled = true;
@@ -7118,18 +7004,17 @@
                       .then(({ error }) => { if (error) console.error('원예약 반납일 자동연장 실패:', error); });
                 }
                 // [NEW] 메인 저장이 성공한 뒤에만 원예약 배송지 주소/우편번호를 새 주소로 변경
+                // 주소변경신청이 확정되면 수령방법은 항상 '택배수령'으로 고정
                 if (addressChangeOrigIdx !== -1) {
                     const newAddress = payload.address;
                     const newZipCode = payload.zipCode;
-                    const chosenDelivery = pendingSingleAddressDelivery;
                     allData[addressChangeOrigIdx].address = newAddress;
                     allData[addressChangeOrigIdx].zipCode = newZipCode;
-                    const patch = { address: newAddress, zipcode: newZipCode };
-                    if (chosenDelivery) { allData[addressChangeOrigIdx].delivery = chosenDelivery; patch.delivery = chosenDelivery; }
+                    allData[addressChangeOrigIdx].delivery = '택배수령';
+                    const patch = { address: newAddress, zipcode: newZipCode, delivery: '택배수령' };
                     filterData(true);
                     sb.from('reservations').update(patch).eq('id', Number(allData[addressChangeOrigIdx].row))
                       .then(({ error }) => { if (error) console.error('원예약 주소 자동변경 실패:', error); });
-                    pendingSingleAddressDelivery = null;
                 }
                 // [NEW] 메인 저장이 성공한 뒤에만 원예약의 대여모델을 변경된 모델로 반영 (재고 계산이 옛 모델로 남는 것 방지)
                 if (modelChangeOrigIdx !== -1) {
