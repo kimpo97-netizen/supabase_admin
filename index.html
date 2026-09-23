@@ -592,6 +592,8 @@
                         <button onclick="setModelFilter('26U')" class="chip-btn model-filter-item" data-id="26U">26U</button>
                         <button onclick="setModelFilter('17P')" class="chip-btn model-filter-item" data-id="17P">17P</button>
                         <button onclick="setModelFilter('17PM')" class="chip-btn model-filter-item" data-id="17PM">17PM</button>
+                        <button onclick="setModelFilter('18P')" class="chip-btn model-filter-item" data-id="18P">18P</button>
+                        <button onclick="setModelFilter('18PM')" class="chip-btn model-filter-item" data-id="18PM">18PM</button>
                     </div>
                 </div>
 
@@ -799,6 +801,8 @@
                                     <button type="button" onclick="selectEditModel('26U')" class="model-select-chip" data-val="26U">26U</button>
                                     <button type="button" onclick="selectEditModel('17P')" class="model-select-chip" data-val="17P">17P</button>
                                     <button type="button" onclick="selectEditModel('17PM')" class="model-select-chip" data-val="17PM">17PM</button>
+                                    <button type="button" onclick="selectEditModel('18P')" class="model-select-chip" data-val="18P">18P</button>
+                                    <button type="button" onclick="selectEditModel('18PM')" class="model-select-chip" data-val="18PM">18PM</button>
                                     <button type="button" onclick="selectEditModel('기타')" class="model-select-chip" data-val="기타">기타</button>
                                 </div>
                                 <input type="hidden" id="edit-model-type">
@@ -1975,7 +1979,7 @@
         }
 
 
-        const MODEL_LIST = ['23U', '24U', '25U', '26U', '17P', '17PM'];
+        const MODEL_LIST = ['23U', '24U', '25U', '26U', '17P', '17PM', '18P', '18PM'];
         const STATUS_PRIORITY = { '예약신청': 1, '대기': 2, '확정': 3, '반품': 4, '반납완료': 5, '취소': 6 };
 
         function isWithinUpcomingBusinessDays(startDateStr, maxDays) {
@@ -2289,7 +2293,7 @@
         // ===================== 설정 (일정 관리) =====================
         // admin_settings 테이블(key/value)에 저장 — 홈페이지가 읽는 키 이름 그대로 유지
         // 자동저장 없음: 모든 수정은 로컬 임시본(settingsDraft)에만 반영되고, "저장" 버튼을 눌러야 서버에 반영됩니다.
-        const SETTINGS_MODELS = ["갤럭시 S23울트라", "갤럭시 S24울트라", "갤럭시 S25울트라", "갤럭시 S26울트라", "아이폰 17프로", "아이폰 17프로맥스"];
+        const SETTINGS_MODELS = ["갤럭시 S23울트라", "갤럭시 S24울트라", "갤럭시 S25울트라", "갤럭시 S26울트라", "아이폰 17프로", "아이폰 17프로맥스", "아이폰 18프로", "아이폰 18프로맥스"];
         const SETTINGS_VENUE_REGIONS = {
             Seoul: ["고척 스카이돔", "티켓링크 아레나", "블루스퀘어", "잠실 실내체육관", "KSPO DOME", "고려대 화정체육관", "장충체육관", "예스24 라이브", "코엑스"],
             Incheon: ["인스파이어 아레나", "아시아드 주경기장", "문학경기장", "송도컨벤시아"],
@@ -2346,7 +2350,7 @@
 
         // ===== [NEW] 재고 관리 : 모델별 보유 대수 + 예약 현황으로 날짜별 대여 가능 대수 계산 =====
         // 17PM을 17P보다 먼저 검사해야 "17PM12" 같은 문자열이 17P로 잘못 분류되지 않습니다.
-        const STOCK_MODEL_ORDER = ['23U', '24U', '25U', '26U', '17PM', '17P'];
+        const STOCK_MODEL_ORDER = ['23U', '24U', '25U', '26U', '17PM', '17P', '18PM', '18P'];
         const DEFAULT_STOCK_PER_MODEL = 20;
         let inventoryCursorDate = new Date(); // 재고표에서 보여주는 기간의 시작일
 
@@ -4139,7 +4143,7 @@
             const counts = { 
                 date: { 'all': 0 },
                 returnDate: { 'all': 0 },
-                model: { 'all': 0, '23U': 0, '24U': 0, '25U': 0, '26U': 0, '17P': 0, '17PM': 0, '백업': 0, '연장': 0, '배터리': 0 },
+                model: { 'all': 0, '23U': 0, '24U': 0, '25U': 0, '26U': 0, '17P': 0, '17PM': 0, '18P': 0, '18PM': 0, '백업': 0, '연장': 0, '배터리': 0 },
                 delivery: { 'all': 0, '택배': 0, '공연장': 0, '사무실': 0 },
                 deliverySub: { 'all': 0, 'remaining': 0, 'pickedup': 0 },
                 return: { 'all': 0, '택배': 0, '당일': 0, '사무실': 0 },
@@ -4907,7 +4911,7 @@
                                 if (String(item.model).includes('보조배터리')) batteryCount++;
                                 let rawModel = String(item.model || '').replace(/\+?\s*보조배터리/g, '').trim();
                                 let shortModel = '기타';
-                                const models = ['23U', '24U', '25U', '26U', '17PM', '17P'];
+                                const models = ['23U', '24U', '25U', '26U', '17PM', '17P', '18PM', '18P'];
                                 for (const m of models) {
                                     if (rawModel.toUpperCase().includes(m)) { shortModel = m; break; }
                                 }
@@ -4916,7 +4920,7 @@
                         }
                     });
 
-                    const predefinedOrder = ['23U', '24U', '25U', '26U', '17P', '17PM', '기타'];
+                    const predefinedOrder = ['23U', '24U', '25U', '26U', '17P', '17PM', '18P', '18PM', '기타'];
                     const sortedModelCounts = Object.entries(modelCounts).sort((a, b) => {
                         let idxA = predefinedOrder.indexOf(a[0]);
                         let idxB = predefinedOrder.indexOf(b[0]);
@@ -5605,7 +5609,7 @@
                     let currentPrice = parseInt(String(allData[targetIndex].totalPrice || 0).replace(/[^0-9]/g, '')) || 0;
                     let modelStr = String(allData[targetIndex].model || '').toUpperCase();
                     let addPrice = 15000;
-                    if (modelStr.includes('17P') || modelStr.includes('IPHONE') || modelStr.includes('아이폰')) {
+                    if (modelStr.includes('17P') || modelStr.includes('18P') || modelStr.includes('IPHONE') || modelStr.includes('아이폰')) {
                         addPrice = 20000;
                     }
                     let newPrice = currentPrice + addPrice;
@@ -5790,21 +5794,27 @@
             if (selectedRows.length === 0) return;
 
             const originalDataBackup = [];
-            const updates = []; 
-            
+            const updates = [];
+            const notifyPhones = []; // [NEW] 이 상태(백업시작/백업완료)가 새로 붙는 건 중 알림톡 보낼 대상(phone) 모음
+
             selectedRows.forEach(rowId => {
                 const targetIndex = allData.findIndex(item => String(item.row) === String(rowId));
                 if (targetIndex !== -1) {
                     originalDataBackup.push({ index: targetIndex, data: { ...allData[targetIndex] } });
-                    
+
                     let currentMemo = allData[targetIndex].memo || '';
-                    
+
+                    // [NEW] 이미 같은 상태였다면(재클릭 등) 새로 붙는 게 아니므로 알림톡 대상에서 제외
+                    if (!currentMemo.includes(status)) {
+                        notifyPhones.push(allData[targetIndex].phone);
+                    }
+
                     let cleanMemo = currentMemo.replace(/\/?\s*백업시작/g, '').replace(/\/?\s*백업완료/g, '').trim();
                     if (cleanMemo.endsWith('/')) cleanMemo = cleanMemo.slice(0, -1).trim();
 
                     const newMemo = cleanMemo ? cleanMemo + " / " + status : status;
-                    
-                    allData[targetIndex].memo = newMemo; 
+
+                    allData[targetIndex].memo = newMemo;
                     updates.push({ row: rowId, memo: newMemo, orderTime: allData[targetIndex].orderTime, phone: allData[targetIndex].phone });
                 }
             });
@@ -5817,6 +5827,13 @@
 
             try {
                 await sbBatchUpdate(updates);
+                // [NEW] 저장 성공 후에만 백업 시작/완료 안내 알림톡 발송 (일괄변경)
+                const templateKey = status === '백업시작' ? 'backup_start' : status === '백업완료' ? 'backup_complete' : null;
+                if (templateKey) {
+                    for (const phone of notifyPhones) {
+                        sendAdminAlimtalk(templateKey, phone, {});
+                    }
+                }
             } catch (err) {
                 originalDataBackup.forEach(backup => { Object.assign(allData[backup.index], backup.data); });
                 filterData(true);
@@ -6066,7 +6083,7 @@
                 const fullModel = (modelType + deviceId).toUpperCase();
                 
                 let addPrice = 15000;
-                if (fullModel.includes('17P') || fullModel.includes('IPHONE') || fullModel.includes('아이폰')) {
+                if (fullModel.includes('17P') || fullModel.includes('18P') || fullModel.includes('IPHONE') || fullModel.includes('아이폰')) {
                     addPrice = 20000;
                 }
                 priceInput.value = currentPrice + addPrice;
@@ -6110,7 +6127,7 @@
             
             let baseModel = '기타';
             let assignedId = displayModel;
-            const models = ['23U', '24U', '25U', '26U', '17PM', '17P'];
+            const models = ['23U', '24U', '25U', '26U', '17PM', '17P', '18PM', '18P'];
             for (const m of models) {
                 if (displayModel.toUpperCase().includes(m)) {
                     baseModel = m;
@@ -6824,7 +6841,7 @@
             const hasBattery = rawModel.includes('보조배터리');
             rawModel = rawModel.replace(/\+?\s*보조배터리/g, '').trim();
             let matchedModel = '기타', deviceId = rawModel;
-            const models = ['23U', '24U', '25U', '26U', '17PM', '17P'];
+            const models = ['23U', '24U', '25U', '26U', '17PM', '17P', '18PM', '18P'];
             for (const m of models) { if (rawModel.toUpperCase().includes(m)) { matchedModel = m; deviceId = rawModel.replace(new RegExp(m, 'i'), '').trim(); break; } }
             selectEditModel(matchedModel);
             document.getElementById('edit-device-id').value = deviceId;
@@ -7110,7 +7127,7 @@
         // model에 실제 기종명(갤럭시/아이폰/S00울트라/17프로 등)이 들어있는지
         function isRealDeviceItem(item) {
             const m = String(item && item.model || '');
-            return /갤럭시|아이폰|iphone|galaxy|울트라|ultra|프로맥스|프로|s2\d|s26|17p/i.test(m);
+            return /갤럭시|아이폰|iphone|galaxy|울트라|ultra|프로맥스|프로|s2\d|s26|17p|18p/i.test(m);
         }
 
         // 3지선다 확인창: 결제됨 / 결제안됨 / 취소
@@ -7341,7 +7358,7 @@
         ==================================================================== */
         var rvState = { list: [], editingId: null, uploading: false };
         var RV_BUCKET = 'review-images';
-        var RV_MODELS = ['갤럭시 S23 울트라','갤럭시 S24 울트라','갤럭시 S25 울트라','갤럭시 S26 울트라','아이폰 17 프로','아이폰 17 프로맥스'];
+        var RV_MODELS = ['갤럭시 S23 울트라','갤럭시 S24 울트라','갤럭시 S25 울트라','갤럭시 S26 울트라','아이폰 17 프로','아이폰 17 프로맥스','아이폰 18 프로','아이폰 18 프로맥스'];
 
         function rvEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -7751,6 +7768,8 @@
                             <button type="button" onclick="selectAddModel('26U')"  class="model-select-chip" data-val="26U">26U</button>
                             <button type="button" onclick="selectAddModel('17P')"  class="model-select-chip" data-val="17P">17P</button>
                             <button type="button" onclick="selectAddModel('17PM')" class="model-select-chip" data-val="17PM">17PM</button>
+                            <button type="button" onclick="selectAddModel('18P')" class="model-select-chip" data-val="18P">18P</button>
+                            <button type="button" onclick="selectAddModel('18PM')" class="model-select-chip" data-val="18PM">18PM</button>
                             <button type="button" onclick="selectAddModel('기타')" class="model-select-chip" data-val="기타">기타</button>
                         </div>
                         <input type="hidden" id="add-model-type">
@@ -8169,7 +8188,7 @@
                         <label class="text-[12px] font-bold text-slate-500 mb-1 block">기종 *</label>
                         <input list="rv-models" id="rv-f-model" placeholder="기종 선택/입력" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-800 outline-none focus:border-indigo-300">
                         <datalist id="rv-models">
-                            <option value="갤럭시 S23 울트라"></option><option value="갤럭시 S24 울트라"></option><option value="갤럭시 S25 울트라"></option><option value="갤럭시 S26 울트라"></option><option value="아이폰 17 프로"></option><option value="아이폰 17 프로맥스"></option>
+                            <option value="갤럭시 S23 울트라"></option><option value="갤럭시 S24 울트라"></option><option value="갤럭시 S25 울트라"></option><option value="갤럭시 S26 울트라"></option><option value="아이폰 17 프로"></option><option value="아이폰 17 프로맥스"></option><option value="아이폰 18 프로"></option><option value="아이폰 18 프로맥스"></option>
                         </datalist>
                     </div>
                     <div>
