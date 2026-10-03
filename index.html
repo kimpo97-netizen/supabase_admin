@@ -1348,6 +1348,123 @@
             if (lockerDetailNumber != null) renderLockerDetailSheet();
         }
 
+        // ===== 관리자용(창고) 보관함: 대여모델별 남은 기기 수량 =====
+        // storage_lockers.stock (jsonb) 예: { "23U": 3, "24U": 1 } — 팝업의 [보관하기](+) / [꺼내기](-)로 증감합니다.
+        function lockerStockOf(l) {
+            return (l && l.stock && typeof l.stock === 'object') ? l.stock : {};
+        }
+        function lockerStockTotal(l) {
+            return Object.values(lockerStockOf(l)).reduce((sum, v) => sum + (Number(v) || 0), 0);
+        }
+        // 타일에 보여줄 한 줄 요약. 예: "23U 11대, 24U 1대" (수량이 0인 모델은 생략)
+        function lockerStockSummary(l) {
+            const s = lockerStockOf(l);
+            return MODEL_LIST.filter(m => Number(s[m]) > 0).map(m => `${m} ${s[m]}대`).join(", ");
+        }
+
+        let lockerStockUI = {}; // { [보관함번호]: { sel: { [모델]: 수량(문자열) } } } — 팝업에서 고른 모델들과 입력한 수량 (다시 그려도 유지)
+        function lockerStockUIState(n) {
+            return lockerStockUI[n] || (lockerStockUI[n] = { sel: {} });
+        }
+        // 대여모델은 여러 개를 동시에 선택할 수 있습니다. 선택하면 수량 1로 시작하고, 다시 누르면 선택이 해제됩니다.
+        function toggleLockerStockModel(n, m) {
+            const sel = lockerStockUIState(n).sel;
+            if (m in sel) delete sel[m]; else sel[m] = '1';
+            refreshLockerViews();
+        }
+        function setLockerStockQty(n, m, v) {
+            const sel = lockerStockUIState(n).sel;
+            if (m in sel) sel[m] = String(v || '').replace(/[^0-9]/g, '');
+        }
+        function stepLockerStockQty(n, m, delta) {
+            const sel = lockerStockUIState(n).sel;
+            if (!(m in sel)) return;
+            sel[m] = String(Math.max(0, (parseInt(sel[m], 10) || 0) + delta));
+            refreshLockerViews();
+        }
+
+        // 연속으로 눌러도 서로 덮어쓰지 않도록 한 번에 하나씩 순서대로 처리합니다.
+        let lockerStockQueue = Promise.resolve();
+        // 선택한 모델 전부에 대해 각자 입력한 수량만큼 한 번에 더하거나(store) 뺍니다(take).
+        function applyLockerStock(n, mode) {
+            const locker = lockers.find(l => l.locker_number === n);
+            if (!locker) return;
+            if (!('stock' in locker)) {
+                showAppAlert("수량 기능을 쓰려면 Supabase SQL 편집기에서 아래 한 줄을 먼저 실행해주세요.\n\nalter table storage_lockers add column if not exists stock jsonb not null default '{}'::jsonb;", '⚠️ 설정 필요', '⚠️');
+                return;
+            }
+            const ui = lockerStockUIState(n);
+            const selected = MODEL_LIST.filter(m => m in ui.sel).map(m => ({ model: m, qty: parseInt(ui.sel[m], 10) }));
+            if (selected.length === 0) { showToast('대여모델을 먼저 선택해주세요'); return; }
+            if (selected.some(p => isNaN(p.qty))) { showToast('선택한 모델의 수량을 입력해주세요 (해당 없으면 0)'); return; }
+            // 수량이 0인 모델은 이번 보관하기/꺼내기에서 제외합니다.
+            const picks = selected.filter(p => p.qty > 0);
+            if (picks.length === 0) { showToast('수량이 모두 0이에요. 1 이상 입력해주세요'); return; }
+
+            // 실제 적용 전에 "이전 → 변경 후" 수량을 보여주고 한 번 더 확인받습니다.
+            const stockNow = lockerStockOf(locker);
+            const sign = mode === 'store' ? 1 : -1;
+            if (mode === 'take') {
+                const short = picks.filter(p => p.qty > (Number(stockNow[p.model]) || 0));
+                if (short.length > 0) {
+                    showToast(short.map(p => `${p.model}은(는) ${Number(stockNow[p.model]) || 0}대밖에 없어요`).join(', '));
+                    return;
+                }
+            }
+            const lines = picks.map(p => {
+                const before = Number(stockNow[p.model]) || 0;
+                return `${p.model}: ${before}대 → ${before + sign * p.qty}대 (${sign > 0 ? '+' : '-'}${p.qty})`;
+            });
+            const totalBefore = lockerStockTotal(locker);
+            const totalAfter = totalBefore + sign * picks.reduce((sum, p) => sum + p.qty, 0);
+            const msg = `${n}번 보관함에 ${mode === 'store' ? '보관하기를' : '꺼내기를'} 적용할까요?\n\n${lines.join('\n')}\n\n총 ${totalBefore}대 → ${totalAfter}대`;
+            showAppConfirm(
+                msg,
+                () => runLockerStock(n, mode, picks),
+                mode === 'store' ? '보관하기 확인' : '꺼내기 확인',
+                mode === 'store' ? '보관하기' : '꺼내기',
+                mode === 'store' ? 'bg-emerald-600' : 'bg-rose-500',
+                mode === 'store' ? '📥' : '📤'
+            );
+        }
+
+        function runLockerStock(n, mode, picks) {
+            const ui = lockerStockUIState(n);
+            const label = mode === 'store' ? '보관' : '꺼냄';
+
+            lockerStockQueue = lockerStockQueue.catch(() => {}).then(async () => {
+                try {
+                    // 다른 곳에서 바뀐 수량을 덮어쓰지 않도록, DB의 최신 수량을 읽어서 더하고 뺍니다.
+                    const { data: fresh, error: e1 } = await sb.from('storage_lockers').select('stock').eq('locker_number', n).single();
+                    if (e1) throw e1;
+                    const stock = { ...((fresh && fresh.stock && typeof fresh.stock === 'object') ? fresh.stock : {}) };
+                    const current = lockers.find(l => l.locker_number === n);
+                    if (mode === 'take') {
+                        const short = picks.filter(p => p.qty > (Number(stock[p.model]) || 0));
+                        if (short.length > 0) {
+                            if (current) current.stock = stock;
+                            showToast(short.map(p => `${p.model}은(는) ${Number(stock[p.model]) || 0}대밖에 없어요`).join(', '));
+                            return;
+                        }
+                    }
+                    picks.forEach(p => {
+                        const before = Number(stock[p.model]) || 0;
+                        stock[p.model] = mode === 'store' ? before + p.qty : before - p.qty;
+                    });
+                    const { error: e2 } = await sb.from('storage_lockers').update({ stock, updated_at: new Date().toISOString() }).eq('locker_number', n);
+                    if (e2) throw e2;
+                    if (current) current.stock = stock;
+                    ui.sel = {};
+                    const total = Object.values(stock).reduce((sum, v) => sum + (Number(v) || 0), 0);
+                    showToast(`${n}번 · ${picks.map(p => `${p.model} ${p.qty}대`).join(', ')} ${label} → 총 ${total}대`);
+                } catch (e) {
+                    showAppAlert('수량 저장 실패: ' + (e.message || ''), '🚨 오류', '⚠️');
+                } finally {
+                    refreshLockerViews();
+                }
+            });
+        }
+
         function openLockerManager() {
             lockerAssignTargetRow = null;
             document.getElementById('locker-overlay').classList.remove('hidden');
@@ -1416,7 +1533,8 @@
             }
             if (isAdmin) {
                 stateCls = 'border-rose-300 bg-rose-50';
-                statusBadge = '<span class="text-xs font-black text-rose-600">관리자용(창고)</span>';
+                const stockTotal = lockerStockTotal(l);
+                statusBadge = `<span class="text-xs font-black text-rose-600">관리자용(창고)${stockTotal > 0 ? ` · ${stockTotal}대` : ''}</span>`;
             }
             // 배치 대상 예약의 대여모델과 다른 보관함은 연회색으로 흐리게 처리 (배정숫자는 무시하고 모델만 비교)
             const isDimmed = !!(targetModelBase && !isTarget && parsed.base !== targetModelBase);
@@ -1427,7 +1545,7 @@
             // 압축 타일에 보여줄 한 줄 요약: 배정됨 → 고객명 / 모델만 있음 → 모델+배정번호 / 그 외 → 비어있음(관리자용은 별도 표기)
             let summaryText, summaryCls;
             if (isAdmin) {
-                summaryText = l.device_model ? String(l.device_model) : '관리자용';
+                summaryText = lockerStockSummary(l) || (l.device_model ? String(l.device_model) : '관리자용');
                 summaryCls = 'text-rose-500';
             } else if (l.reservation_id != null) {
                 const namePrefix = l.device_model ? `${parsed.base || ''}${parsed.number || ''} ` : '';
@@ -1442,6 +1560,45 @@
             }
 
             return { n, isAdmin, isTarget, occupant, parsed, stateCls, statusBadge, isDimmed, summaryText, summaryCls };
+        }
+
+        // 관리자용(창고) 보관함 전체에 보관 중인 기기를 대여모델별로 합산해서, 그리드 아래 안내 박스에 보여줍니다.
+        function renderLockerStockSummary() {
+            const box = document.getElementById('locker-stock-summary');
+            if (!box) return;
+            const adminLockers = lockers.filter(l => l.is_admin);
+            if (adminLockers.length === 0) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+
+            const perModel = {}; // { 모델: { total, where: [{ n, qty }] } }
+            adminLockers.forEach(l => {
+                const s = lockerStockOf(l);
+                MODEL_LIST.forEach(m => {
+                    const q = Number(s[m]) || 0;
+                    if (q <= 0) return;
+                    const entry = perModel[m] || (perModel[m] = { total: 0, where: [] });
+                    entry.total += q;
+                    entry.where.push({ n: l.locker_number, qty: q });
+                });
+            });
+            const models = MODEL_LIST.filter(m => perModel[m]);
+            const grand = models.reduce((sum, m) => sum + perModel[m].total, 0);
+
+            const chips = models.map(m => `
+                <div style="background:#fff;border:1px solid #FDE68A;border-radius:10px;padding:6px 10px">
+                    <div style="font-size:13px;font-weight:900;color:#1E293B">${m} ${perModel[m].total}대</div>
+                    <div style="font-size:11px;font-weight:700;color:#94A3B8">${perModel[m].where.map(w => `${w.n}번×${w.qty}`).join(' · ')}</div>
+                </div>`).join('');
+
+            box.classList.remove('hidden');
+            box.setAttribute('style', 'border-bottom:1px solid #FDE68A;background:#FFFBEB;padding:10px 16px');
+            box.innerHTML = `
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:${models.length ? 8 : 0}px">
+                    <span style="font-size:13px;font-weight:900;color:#92400E">📦 현재 남은 재고</span>
+                    <span style="font-size:13px;font-weight:900;color:#92400E">총 ${grand}대</span>
+                </div>
+                ${models.length === 0
+                    ? `<div style="font-size:12px;font-weight:700;color:#B45309">관리자용 보관함에 보관 중인 재고가 없어요</div>`
+                    : `<div style="display:flex;flex-wrap:wrap;gap:6px">${chips}</div>`}`;
         }
 
         function renderLockerGrid() {
@@ -1479,6 +1636,7 @@
                         <span class="text-[13px] font-bold ${st.summaryCls} truncate w-full text-center leading-tight">${escapeHtml(st.summaryText)}</span>
                     </button>`;
             }).join('');
+            renderLockerStockSummary();
         }
 
         // 그리드에서 보관함을 탭했을 때 뜨는 상세 편집 바텀시트 내용을 채웁니다.
@@ -1510,9 +1668,39 @@
                 <button type="button" onclick="setLockerModelBase(${n}, '${m}')" class="model-select-chip ${parsed.base === m ? 'active' : ''}">${m}</button>
             `).join('');
 
+            // 관리자용(창고): 대여모델 버튼(모델별 남은 수량 표시) (여러 개 선택 가능) → 모델별 수량 입력 → [보관하기]/[꺼내기]
+            const stockState = lockerStockOf(l);
+            const stockUI = lockerStockUIState(n);
+            const stockChips = MODEL_LIST.map(m => `
+                <button type="button" onclick="toggleLockerStockModel(${n}, '${m}')" class="model-select-chip ${(m in stockUI.sel) ? 'active' : ''}" style="padding:8px 12px">${m}<span style="margin-left:6px;font-size:12px;opacity:.75">${Number(stockState[m]) || 0}</span></button>
+            `).join('');
+            const stockPicked = MODEL_LIST.filter(m => m in stockUI.sel);
+            const stockQtyRows = stockPicked.length === 0
+                ? ''
+                : stockPicked.map(m => `
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                        <span style="width:48px;font-weight:800;font-size:13px;color:#334155">${m}</span>
+                        <button type="button" onclick="stepLockerStockQty(${n}, '${m}', -1)" style="width:40px;height:44px;font-size:18px" class="shrink-0 rounded-lg border border-slate-300 bg-white text-slate-600 font-bold">−</button>
+                        <input type="text" value="${escapeHtml(stockUI.sel[m])}" inputmode="numeric" placeholder="수량" style="flex:1"
+                            oninput="this.value=this.value.replace(/[^0-9]/g,''); setLockerStockQty(${n}, '${m}', this.value)"
+                            class="input-field font-tnum text-center">
+                        <button type="button" onclick="stepLockerStockQty(${n}, '${m}', 1)" style="width:40px;height:44px;font-size:18px" class="shrink-0 rounded-lg border border-slate-300 bg-white text-slate-600 font-bold">+</button>
+                    </div>`).join('');
+            const stockMissingNote = ('stock' in l) ? '' : `<div style="font-size:12px;font-weight:700;color:#E11D48;margin-bottom:12px">수량 저장 컬럼(stock)이 아직 없어요 — 보관하기/꺼내기를 누르면 설정 방법이 안내돼요.</div>`;
+
             const modelSectionHtml = isAdmin ? `
                 <div class="mb-4">
-                    <label class="input-label">보관 내용</label>
+                    <label class="input-label mb-2">대여모델 선택 <span style="font-weight:600;color:#94A3B8">· 여러 개 선택 가능 · 총 ${lockerStockTotal(l)}대 보관 중</span></label>
+                    <div class="flex flex-wrap gap-2">${stockChips}</div>
+                </div>
+                ${stockPicked.length ? `<div class="mb-3"><label class="input-label">수량</label>${stockQtyRows}</div>` : ''}
+                <div class="flex gap-2 mb-4">
+                    <button type="button" onclick="applyLockerStock(${n}, 'store')" style="flex:1" class="py-3 rounded-lg bg-emerald-600 text-white font-bold text-[14px]">보관하기</button>
+                    <button type="button" onclick="applyLockerStock(${n}, 'take')" style="flex:1" class="py-3 rounded-lg bg-rose-500 text-white font-bold text-[14px]">꺼내기</button>
+                </div>
+                ${stockMissingNote}
+                <div class="mb-4">
+                    <label class="input-label">기타 보관 메모 (선택)</label>
                     <input type="text" value="${escapeHtml(l.device_model || '')}" placeholder="예: 여분 배터리, 포장 박스 등"
                         onchange="updateLockerDevice(${n}, this.value)"
                         class="input-field">
@@ -1535,10 +1723,10 @@
             body.innerHTML = `
                 <div class="form-section bg-white shadow-sm" style="margin-bottom:0">
                     <div class="form-title" style="justify-content:space-between">
-                        <span>대여모델 및 배정</span>
+                        <span>${isAdmin ? '기기 보관 현황' : '대여모델 및 배정'}</span>
                         <span class="flex items-center gap-2 shrink-0" style="margin-left:auto">
-                            <button type="button" onclick="updateLockerDevice(${n}, '')" title="선택한 대여모델과 배정번호를 초기화합니다"
-                                class="text-[11px] font-bold text-slate-400 bg-white border border-slate-300 rounded-lg px-2 py-1 active:bg-slate-100">초기화</button>
+                            ${isAdmin ? '' : `<button type="button" onclick="updateLockerDevice(${n}, '')" title="선택한 대여모델과 배정번호를 초기화합니다"
+                                class="text-[11px] font-bold text-slate-400 bg-white border border-slate-300 rounded-lg px-2 py-1 active:bg-slate-100">초기화</button>`}
                             <span class="text-[12px] font-bold ${isAdmin ? 'text-rose-500' : 'text-slate-400'}">관리자</span>
                             <button type="button" onclick="toggleLockerAdmin(${n}, ${!isAdmin})" aria-pressed="${isAdmin}" title="켜면 이 보관함은 고객 배정에서 제외되고, 대여모델 칸에 자유롭게 텍스트를 입력할 수 있어요"
                                 class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${isAdmin ? 'bg-rose-400' : 'bg-slate-200'}">
@@ -8099,6 +8287,7 @@
                     </div>
                 </div>
             </div>
+            <div id="locker-stock-summary" class="hidden shrink-0"></div>
             <div id="locker-grid" class="flex-1 overflow-y-auto grid grid-cols-3 gap-1.5 items-start" style="padding: 12px calc(12px) calc(28px + env(safe-area-inset-bottom,0px));"></div>
         </div>
 
