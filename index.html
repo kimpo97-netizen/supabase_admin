@@ -69,6 +69,7 @@
         /* [NEW] 블랙리스트 매치 카드/뱃지 강조 */
         .blacklist-card { border: 3px solid #ef4444 !important; background-color: #fef2f2 !important; box-shadow: 0 0 12px rgba(239,68,68,0.35) !important; z-index: 10; }
         .blacklist-badge { display: inline-flex; align-items: center; gap: 2px; font-size: 10px; font-weight: 800; color: #fff; background-color: #dc2626; padding: 2px 6px; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,.1); flex-shrink: 0; }
+        .package-badge { display: inline-flex; align-items: center; gap: 2px; font-size: 10px; font-weight: 800; color: #be185d; background-color: #fce7f3; border: 1px solid #fbcfe8; padding: 1px 6px; border-radius: 4px; flex-shrink: 0; }
 
         .status-badge { display: inline-flex; align-items: center; justify-content: center; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 800; line-height: 1; border: 1px solid transparent; white-space: nowrap; }
         .status-wait { background-color: #FFF7ED; color: #C2410C; border-color: #FED7AA; }
@@ -6186,7 +6187,9 @@
                         <span class="text-[11px] leading-tight text-slate-400 font-bold font-tnum min-w-0 truncate">${timeText}</span>
                         <div class="flex-1"></div>
                         ${String(item.delivery || '').includes('퀵') ? `<button type="button" onclick="event.stopPropagation(); copyQuickInfoFromList('${item.row}')" class="shrink-0 flex items-center gap-1 text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 px-2 py-1 rounded-lg active:bg-sky-100">🏍️ 퀵</button>` : ''}
-                        <button type="button" onclick="event.stopPropagation(); copyRefundInfo('${item.row}')" class="shrink-0 flex items-center gap-1 text-[11px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-1 rounded-lg active:bg-rose-100">💰 환불</button>
+                        ${item.isPackage
+                            ? `<span class="package-badge" style="font-size:11px; padding:4px 8px; border-radius:8px;" title="콘서트 패키지 예약 (환불 불가 상품)">🎁 패키지</span>`
+                            : `<button type="button" onclick="event.stopPropagation(); copyRefundInfo('${item.row}')" class="shrink-0 flex items-center gap-1 text-[11px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-1 rounded-lg active:bg-rose-100">💰 환불</button>`}
                     </div>
 
                     <!-- 기기 · 이름 · 연락처 (1열) -->
