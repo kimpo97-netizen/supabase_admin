@@ -1982,6 +1982,21 @@
             }, [{ buttonType: 'WL', buttonName: '배송조회', linkMo: trackingUrl, linkPc: trackingUrl }]);
         }
 
+        // 방문택배 방문 예정 안내 알림톡 — 방문택배신청 건이 '반품'으로 바뀔 때 발송. #{반납일}에는 "방문 예정일"을 넣는다.
+        // 고객 신청 시 scheduleName에 "방문 예정일: 26년 10월 8일 (반납일)" 형태로 기록되어 있어 거기서 꺼내고(반납일이 주말/공휴일이면
+        // 다음 평일로 조정된 날짜가 들어있음), 없으면(수기 등록 등) 반납일(endDate)을 "26년 10월 8일" 형태로 바꿔 쓴다.
+        function courierVisitDateText(scheduleName, endDate) {
+            const m = String(scheduleName || '').match(/방문 예정일:\s*([^\n(]+)/);
+            if (m && m[1].trim()) return m[1].trim();
+            const d = String(endDate || '').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+            return d ? `${d[1].slice(2)}년 ${Number(d[2])}월 ${Number(d[3])}일` : '';
+        }
+        function sendCourierPickupConfirmedAlimtalk(phone, scheduleName, endDate) {
+            const visitDate = courierVisitDateText(scheduleName, endDate);
+            if (!visitDate) { console.error('방문택배 방문 예정 안내: 방문 예정일을 알 수 없어 알림톡을 보내지 않았어요.'); return; }
+            sendAdminAlimtalk('courier_pickup_confirmed', phone, { '#{반납일}': visitDate });
+        }
+
         // 상태/송장/메모 변경 시 발송하는 알림톡 공용 헬퍼(베스트에포트 — 실패해도 저장 자체는 이미 완료된 상태로 둠, 콘솔에만 에러 남김)
         async function sendAdminAlimtalk(templateKey, phone, variables, buttons) {
             if (!phone) return;
@@ -5194,6 +5209,7 @@
             const waitingNotifyTargets = []; // [NEW] '대기'로 새로 바뀌는 건 중 알림톡 보낼 대상(phone) 모음
             const reviewNotifyTargets = []; // [NEW] '반납완료'로 새로 바뀌는 건 중 리뷰요청 알림톡 보낼 대상 모음
             const bookingConfirmedNotifyTargets = []; // [NEW] '확정'으로 새로 바뀌는 실제 예약건(신청건 제외) 중 예약확정 안내 발송 대상 모음
+            const courierPickupNotifyTargets = []; // [NEW] '반품'으로 새로 바뀌는 방문택배신청 건 중 방문 예정 안내 알림톡 발송 대상 모음
 
             selectedRows.forEach(rowId => {
                 const targetIndex = allData.findIndex(item => String(item.row) === String(rowId));
@@ -5241,6 +5257,10 @@
                     // 저장 성공 후 원예약의 반납방법을 택배반납으로 반영할 작업으로 기록
                     if (newStatus === '반품' && prevStatus !== '반품' && category === '방문택배신청' && item.origin_ref) {
                         originSyncTasks.push({ origin_ref: item.origin_ref, type: 'courierReturnMethod' });
+                    }
+                    // [NEW] 방문택배신청 건이 '반품'으로 새로 바뀌면 → 방문 예정 안내 알림톡 발송 대상으로 기록 (origin_ref 유무와 무관)
+                    if (newStatus === '반품' && prevStatus !== '반품' && category === '방문택배신청') {
+                        courierPickupNotifyTargets.push({ phone: item.phone, scheduleName: item.scheduleName, endDate: item.endDate });
                     }
                     // [NEW] '반납완료'로 바뀌는 건에 물품보관함이 배정되어 있으면, 저장 성공 후 비우기 대상으로 기록
                     if (newStatus === '반납완료' && prevStatus !== '반납완료' && item.locker_number) {
@@ -5330,6 +5350,10 @@
                         '#{반납일}': t.endDate || '',
                         '#{반납방법}': t.returnWay || ''
                     });
+                }
+                // [NEW] 저장 성공 후에만 방문택배 방문 예정 안내 알림톡 발송 (일괄변경)
+                for (const t of courierPickupNotifyTargets) {
+                    sendCourierPickupConfirmedAlimtalk(t.phone, t.scheduleName, t.endDate);
                 }
             } catch (err) {
                 console.error("일괄 저장 실패", err);
@@ -7329,6 +7353,11 @@
                             '#{반납일}': payload.endDate || '',
                             '#{반납방법}': payload.returnWay || ''
                         });
+                    }
+
+                    // 방문택배신청 건이 '반품'으로 새로 바뀌면 → 방문 예정 안내 (방문택배는 확정 대신 반품 상태를 씀)
+                    if (newStatus === '반품' && oldStatus !== '반품' && originalData.category === '방문택배신청') {
+                        sendCourierPickupConfirmedAlimtalk(payload.phone, payload.scheduleName || originalData.scheduleName, payload.endDate || originalData.endDate);
                     }
                 }
             })
