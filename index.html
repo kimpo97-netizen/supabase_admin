@@ -6212,7 +6212,7 @@
                         <div class="flex-1"></div>
                         ${String(item.delivery || '').includes('퀵') ? `<button type="button" onclick="event.stopPropagation(); copyQuickInfoFromList('${item.row}')" class="shrink-0 flex items-center gap-1 text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 px-2 py-1 rounded-lg active:bg-sky-100">🏍️ 퀵</button>` : ''}
                         ${item.isPackage
-                            ? `<span class="package-badge" style="font-size:11px; padding:4px 8px; border-radius:8px;" title="콘서트 패키지 예약 (환불 불가 상품)">🎁 패키지</span>`
+                            ? `<button type="button" onclick="event.stopPropagation(); copyRefundInfo('${item.row}')" class="package-badge shrink-0" style="font-size:11px; padding:4px 8px; border-radius:8px;" title="콘서트 패키지 예약 · 탭하면 환불 계좌 복사">🎁 패키지</button>`
                             : `<button type="button" onclick="event.stopPropagation(); copyRefundInfo('${item.row}')" class="shrink-0 flex items-center gap-1 text-[11px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-1 rounded-lg active:bg-rose-100">💰 환불</button>`}
                     </div>
 
