@@ -445,7 +445,6 @@
         <div id="svc-mini-container" class="hdr-chips no-scrollbar"></div>
 
         <div class="hdr-chips no-scrollbar">
-            <button id="view-mode-btn" onclick="toggleViewMode()" class="hdr-chip chip-indigo" style="font-weight:900;">📋 전체내역 보기</button>
             <button onclick="openCalendarModal()" class="hdr-chip chip-indigo">📅 달력검색</button>
             <button onclick="resetAllFilters()" class="hdr-chip chip-slate">🔄 필터초기화</button>
         </div>
@@ -2387,15 +2386,20 @@
             }
         }
 
-        let currentViewMode = 'all'; // [NEW] 기본값을 전체내역 보기로 변경 ('new' = 신규(예약신청)만 화면표시, 'all' = 전체내역 화면표시)
-        let viewModeAutoSwitchedBySearch = false; // [NEW] 검색어 때문에 자동으로 'all'로 바뀐 경우만 true (검색어 지우면 원상복구용)
-        // 참고: 두 모드 모두 데이터는 항상 전체(deleted_at 없는 전체 예약)를 불러옵니다.
-        // 신규/전체는 "무엇을 화면에 보여줄지"만 결정하고, 검색 필터(날짜/모델/수령방법 등)는
-        // 항상 전체내역 기준으로 옵션과 건수를 보여줍니다.
 
         // [NEW] 주소변경신청은 검토 없이 바로 확정 처리 — 배송지만 바뀌는 요청이라 리스크가 낮으므로
         // 관리자가 일일이 확정을 누르지 않아도 되게, 데이터를 불러올 때마다 자동으로 처리합니다.
         // (연장신청/변경신청처럼 다른 신청 종류는 그대로 관리자 확인을 거칩니다)
+        // [NEW] 같은 원예약(origin_ref)에 주소변경신청이 2건 이상이면 제일 마지막에 신청한 건(id가 가장 큰 건)의 주소만 반영
+        function keepLatestAddressTasks(tasks) {
+            const latest = {};
+            tasks.forEach(t => {
+                if (t.type && t.type !== 'address') return;
+                const prev = latest[t.origin_ref];
+                if (!prev || Number(t.row) > Number(prev.row)) latest[t.origin_ref] = t;
+            });
+            return tasks.filter(t => (t.type && t.type !== 'address') || latest[t.origin_ref] === t);
+        }
         async function autoConfirmAddressChangeRequests() {
             const targets = allData.filter(item => item.category === '주소변경신청' && item.status !== '확정' && !item.deleted_at);
             if (targets.length === 0) return;
@@ -2411,7 +2415,7 @@
                 updates.push({ row: item.row, status: '확정' });
                 autoTrashRowIds.push(String(item.row));
                 if (item.origin_ref) {
-                    originSyncTasks.push({ origin_ref: item.origin_ref, address: item.address, zipCode: item.zipCode });
+                    originSyncTasks.push({ origin_ref: item.origin_ref, row: item.row, address: item.address, zipCode: item.zipCode });
                 }
             });
 
@@ -2420,7 +2424,7 @@
             try {
                 await sbBatchUpdate(updates);
 
-                for (const task of originSyncTasks) {
+                for (const task of keepLatestAddressTasks(originSyncTasks)) {
                     try {
                         const ref = JSON.parse(task.origin_ref);
                         const origIdx = allData.findIndex(r =>
@@ -2479,7 +2483,6 @@
                     renderDateFilters();
                     renderReturnDateFilters();
                     filterData(false);
-                    updateViewModeUI();
                     syncStockClosureToHomepage(); // [NEW] 새로고침 시에도 재고 자동마감을 다시 계산해서 동기화
                     autoConfirmAddressChangeRequests(); // [NEW] 주소변경신청은 검토 없이 바로 확정 처리
                     // [FIX] 카드들이 숨겨졌다 나타났다 하면서 캐러셀이 첫 카드가 아닌 위치로 밀려있을 수 있어,
@@ -2499,7 +2502,7 @@
         // 자동저장 없음: 모든 수정은 로컬 임시본(settingsDraft)에만 반영되고, "저장" 버튼을 눌러야 서버에 반영됩니다.
         const SETTINGS_MODELS = ["갤럭시 S23울트라", "갤럭시 S24울트라", "갤럭시 S25울트라", "갤럭시 S26울트라", "아이폰 17프로", "아이폰 17프로맥스", "아이폰 18프로", "아이폰 18프로맥스"];
         const SETTINGS_VENUE_REGIONS = {
-            Seoul: ["고척 스카이돔", "티켓링크 아레나", "블루스퀘어", "잠실 실내체육관", "KSPO DOME", "고려대 화정체육관", "장충체육관", "예스24 라이브", "코엑스"],
+            Seoul: ["고척 스카이돔", "티켓링크 아레나", "블루스퀘어", "잠실 실내체육관", "KSPO DOME", "고려대 화정체육관", "장충체육관", "예스24 라이브", "코엑스", "KBS아레나"],
             Incheon: ["인스파이어 아레나", "아시아드 주경기장", "문학경기장", "송도컨벤시아"],
             Gyeonggi: ["고양 종합운동장", "킨텍스"]
         };
@@ -3631,25 +3634,6 @@
             doCopy(text).then(() => showToast(`📋 복사됨: ${text}`)).catch(() => showToast('복사에 실패했습니다.'));
         }
 
-        function toggleViewMode() {
-            currentViewMode = (currentViewMode === 'new') ? 'all' : 'new';
-            currentFilterStatus = 'all';
-            viewModeAutoSwitchedBySearch = false; // [NEW] 수동 전환은 자동복구 대상에서 제외
-            updateViewModeUI();
-            filterData(false);
-        }
-
-        function updateViewModeUI() {
-            const btn = document.getElementById('view-mode-btn');
-            if (!btn) return;
-            if (currentViewMode === 'all') {
-                btn.textContent = '🆕 신규만 보기';
-                btn.classList.add('chip-active-indigo');
-            } else {
-                btn.textContent = '📋 전체내역 보기';
-                btn.classList.remove('chip-active-indigo');
-            }
-        }
 
         function resetAllFilters() {
             activeLowStockFilter = null;
@@ -4330,20 +4314,6 @@
         function filterData(isSoftRefresh = false) {
             const query = document.getElementById('search-input').value.toLowerCase();
 
-            // [NEW] 검색어를 입력하면 "신규만 보기" 상태여도 자동으로 전체내역 보기로 전환
-            if (query.trim() !== '' && currentViewMode === 'new') {
-                currentViewMode = 'all';
-                currentFilterStatus = 'all';
-                viewModeAutoSwitchedBySearch = true;
-                updateViewModeUI();
-            }
-            // [NEW] 검색어를 전부 지우면, 검색 때문에 자동전환된 경우에 한해 원래 설정(신규만 보기)으로 복구
-            if (query.trim() === '' && viewModeAutoSwitchedBySearch) {
-                currentViewMode = 'new';
-                viewModeAutoSwitchedBySearch = false;
-                updateViewModeUI();
-            }
-            
             const counts = { 
                 date: { 'all': 0 },
                 returnDate: { 'all': 0 },
@@ -4662,11 +4632,7 @@
                      if (currentDeliverySubFilter === 'pickedup' && !isAssigned) matchDeliverySub = false;
                 }
 
-                // 신규/전체 보기 토글: 카운트/필터 옵션엔 영향 없이 "화면에 보여줄지"만 결정
-                const isNewStatusItem = status === '신청' || status === '' || status === '예약신청';
-                const matchViewMode = currentViewMode === 'all' || isNewStatusItem;
-
-                return matchViewMode && matchQuery && matchDate && matchReturnDate && matchModel && matchDelivery && matchReturn && matchDeliverySub;
+                return matchQuery && matchDate && matchReturnDate && matchModel && matchDelivery && matchReturn && matchDeliverySub;
             });
 
             // [NEW] 신청·대기중인 예약이 없으면 필터를 자동으로 해제 (있으면 자동으로 다시 켜짐 — 사용자가 직접 끈 경우는 제외)
@@ -5247,7 +5213,7 @@
                             originSyncTasks.push({ origin_ref: item.origin_ref, type: 'extend', endDate: item.endDate });
                         } else if (String(category || '').includes('주소변경')) {
                             // [NEW] 주소변경신청이 확정되면 원예약의 수령방법은 항상 '택배수령'으로 고정
-                            originSyncTasks.push({ origin_ref: item.origin_ref, type: 'address', address: item.address, zipCode: item.zipCode, delivery: '택배수령' });
+                            originSyncTasks.push({ origin_ref: item.origin_ref, type: 'address', row: rowId, address: item.address, zipCode: item.zipCode, delivery: '택배수령' });
                         } else if (String(category || '') === '변경신청') {
                             // [NEW] 대여모델만 바꾸는 신청건 — 원예약의 model을 바꾸지 않으면 재고 계산이 옛 모델 기준으로 남아 새 모델 품절이 반영되지 않음
                             originSyncTasks.push({ origin_ref: item.origin_ref, type: 'model', model: item.model });
@@ -5277,7 +5243,7 @@
             try {
                 await sbBatchUpdate(updates);
                 // [NEW] 저장 성공 후에만 연장/주소변경 신청 내용을 원예약(origin_ref 매칭)에 반영
-                for (const task of originSyncTasks) {
+                for (const task of keepLatestAddressTasks(originSyncTasks)) {
                     try {
                         const ref = JSON.parse(task.origin_ref);
                         const origIdx = allData.findIndex(r =>
