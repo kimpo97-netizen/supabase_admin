@@ -513,6 +513,7 @@
     <div id="hdr-quick-menu" class="hidden hdr-quick-menu">
         <button class="hdr-quick-item" onclick="closeQuickMenu(); openSettings();"><span class="hdr-quick-ico" style="background:#eef2ff; color:#4f46e5;">⚙️</span> 설정</button>
         <button class="hdr-quick-item" onclick="closeQuickMenu(); openPushSettings();"><span class="hdr-quick-ico" style="background:#ecfeff; color:#0891b2;">🔔</span> 예약 알림<span class="apn-badge">꺼짐</span></button>
+        <button class="hdr-quick-item" onclick="closeQuickMenu(); openPickupTimeSurvey();"><span class="hdr-quick-ico" style="background:#ecfeff; color:#0e7490;">🕒</span> 수령시간 조사</button>
         <button class="hdr-quick-item" onclick="closeQuickMenu(); window.open('https://kimpo97-netizen.github.io/admin/', '_blank');"><span class="hdr-quick-ico" style="background:#f5f3ff; color:#7c3aed;">🏟️</span> 공연장</button>
         <button class="hdr-quick-item" onclick="closeQuickMenu(); openSales();"><span class="hdr-quick-ico" style="background:#ecfdf5; color:#059669;">📊</span> 매출 통계</button>
         <button class="hdr-quick-item" onclick="closeQuickMenu(); openTrash();"><span class="hdr-quick-ico" style="background:#fff1f2; color:#e11d48;">🗑️</span> 휴지통</button>
@@ -683,6 +684,7 @@
                         <button onclick="bulkSendAlimtalk('venue_unavailable')" class="text-[13px] font-bold bg-rose-50 text-rose-700 hover:bg-rose-100 px-4 py-2 rounded-lg transition-colors border border-rose-200 flex items-center gap-1.5 shadow-sm">🚫 공연장 불가</button>
                         <button onclick="bulkSendAlimtalk('venue_guide')" class="text-[13px] font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-4 py-2 rounded-lg transition-colors border border-indigo-200 flex items-center gap-1.5 shadow-sm">📍 공연장 안내</button>
                         <button onclick="bulkSendAlimtalk('identity_verify')" class="text-[13px] font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-4 py-2 rounded-lg transition-colors border border-emerald-200 flex items-center gap-1.5 shadow-sm">🪪 인증</button>
+                        <button onclick="bulkSendAlimtalk('return_tracking_request')" class="text-[13px] font-bold bg-pink-50 text-pink-700 hover:bg-pink-100 px-4 py-2 rounded-lg transition-colors border border-pink-200 flex items-center gap-1.5 shadow-sm" style="background:#FDF2F8;color:#BE185D;border-color:#FBCFE8">📮 등기번호 제출</button>
                     </div>
 
                     <div class="flex flex-wrap items-center justify-start gap-2 w-full mt-1">
@@ -1171,6 +1173,31 @@
                 (navigator.clipboard ? navigator.clipboard.writeText(no) : Promise.reject()).then(() => { b.textContent = '복사됨'; }).catch(() => { b.textContent = no; });
             });
             document.body.appendChild(wrap);
+        }
+
+        // [NEW] 2026-11-04 등기번호 제출 안내 알림톡 — 택배 반납인데 고객이 아직 반납 등기번호를 등록하지 않은 예약에 보낸다
+        function needsReturnTrackRequest(item) {
+            const st = String(item.status || '');
+            return !item.returnTrackingNumber && String(item.returnWay || '').includes('택배') && !/취소|반납|환불/.test(st) && !String(item.category || '').includes('신청') || false;
+        }
+        function sendReturnTrackRequest(row) {
+            const item = allData.find(d => String(d.row) === String(row));
+            if (!item) return;
+            if (!item.phone) { showToast('연락처가 없어 보낼 수 없어요'); return; }
+            showAppConfirm(`${item.name || ''}님(${item.phone})에게\n'등기번호 제출 안내' 알림톡을 보낼까요?`, async () => {
+                try {
+                    const { data, error } = await sb.functions.invoke('send-alimtalk', {
+                        body: { templateKey: 'return_tracking_request', phone: item.phone, variables: {} }
+                    });
+                    if (error) throw error;
+                    if (data && data.error) throw new Error(data.error);
+                    if (data && data.success === false) throw new Error(JSON.stringify(data.results || data));
+                    showToast(`${item.name || ''}님에게 등기번호 제출 안내를 보냈어요`);
+                } catch (e) {
+                    console.error('등기번호 제출 안내 알림톡 발송 실패', e);
+                    showAppAlert('알림톡을 보내지 못했어요.\n' + (e && e.message ? e.message : e), '⚠️ 발송 실패', '⚠️');
+                }
+            }, '📮 등기번호 제출 안내', '보내기');
         }
 
         // Supabase 레코드 → 관리자 페이지가 기대하는 형태로 매핑
@@ -5932,6 +5959,8 @@
             venue_unavailable: { label: '공연장 불가', sentField: 'venueUnavailableSentAt' },
             venue_guide: { label: '공연장 안내', sentField: 'venueGuideSentAt' },
             identity_verify: { label: '본인 인증 요청', sentField: 'identityVerifySentAt' },
+            // [NEW] 2026-11-04 등기번호 제출 안내 (반납 등기번호를 아직 안 알려준 고객에게)
+            return_tracking_request: { label: '등기번호 제출 안내', sentField: 'returnTrackRequestSentAt' },
         };
 
         function bulkSendAlimtalk(templateKey) {
@@ -6268,9 +6297,10 @@
 
                     <!-- 대여 일정 -->
                     <div class="flex items-center flex-wrap gap-x-1.5 gap-y-1 w-full text-[13.5px] font-black text-slate-800 font-tnum tracking-tight">
-                        <span>📅 ${start} <span class="text-blue-600 font-bold text-[12px]">(${item.delivery || '-'})</span></span>
+                        <span>📅 ${start} <span class="text-blue-600 font-bold text-[12px]">(${item.delivery || '-'})</span>${ptCardBadge(item)}</span>
                         <span class="text-slate-300">➔</span>
                         <span>${end} ${item.returnTrackingNumber ? `<button type="button" data-courier="${escapeHtml(item.returnCourier || '우체국택배')}" data-no="${escapeHtml(item.returnTrackingNumber)}" data-at="${escapeHtml(item.returnTrackingAt || '')}" onclick="event.stopPropagation(); openReturnTrackPopup(this)" class="font-bold text-[12px] hover:underline" style="color:#DB2777;background:#FCE7F3;border-radius:4px;padding:0 4px;cursor:pointer" title="반납 등기번호 등록됨 (클릭: 택배사·등기번호 보기)">(${item.returnWay || '-'})</button>` : `<span class="text-emerald-600 font-bold text-[12px]">(${item.returnWay || '-'})</span>`}</span>
+                        ${needsReturnTrackRequest(item) ? `<button type="button" onclick="event.stopPropagation(); sendReturnTrackRequest('${item.row}')" class="ml-auto text-[11px] font-bold whitespace-nowrap rounded-md px-2 py-1" style="color:#DB2777;background:#FDF2F8;border:1px solid #FBCFE8">📮 등기번호 제출</button>` : ''}
                     </div>
 
                     <!-- 행사명 -->
@@ -8789,6 +8819,103 @@
         // 페이지가 열리면 서비스워커를 등록해 두고(홈 화면 앱 설치 조건), 메뉴의 켜짐/꺼짐 표시를 맞춘다
         if (apnSupported() && apnSecure()) {
             window.addEventListener('load', () => { apnRefreshBadge(); });
+        }
+    </script>
+    <!-- ===================== [NEW] 2026-11-04 공연장 수령 시간 조사 결과 ===================== -->
+    <script>
+        // 손님이 홈페이지 ?page=pickup-time 에서 고른 희망 수령 시간(reservations."pickupTimePref")을 공연별로 모아 보여준다
+        const PT_SURVEY_URL = 'https://serincam.com/?page=pickup-time';
+        const PT_OPTIONS = ['11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '시간 상관없어요'];
+        function ptTodayStr() {
+            const d = new Date(Date.now() + 9 * 3600 * 1000);
+            return d.toISOString().slice(0, 10);
+        }
+        function ptCardBadge(item) {
+            if (item.delivery !== '공연장수령' || !item.pickupTimePref) return '';
+            const tip = '희망 수령 시간: ' + item.pickupTimePref + (item.pickupTimeNote ? '\n요청: ' + item.pickupTimeNote : '');
+            return `<button type="button" data-pt="${escapeHtml(String(item.scheduleName || ''))}" onclick="event.stopPropagation(); openPickupTimeSurvey(this.dataset.pt)" title="${escapeHtml(tip)}" style="margin-left:4px;font-size:11px;font-weight:800;color:#0E7490;background:#CFFAFE;border-radius:4px;padding:0 4px;cursor:pointer">🕒 ${escapeHtml(item.pickupTimePref.split(', ')[0].replace('시간 상관없어요', '무관'))}${item.pickupTimePref.includes(',') ? '+' : ''}</button>`;
+        }
+        function ptGroups() {
+            const today = ptTodayStr();
+            const map = new Map();
+            (allData || []).forEach(r => {
+                if (r.delivery !== '공연장수령' || r.deleted_at) return;
+                // 원예약은 category '예약신청' — 연장·백업·취소 등 부가 신청 건만 뺀다
+                if (/취소|환불|반납/.test(r.status || '') || /신청/.test(String(r.category || '').replace('예약신청', ''))) return;
+                if ((r.endDate || r.startDate || '') < today) return;
+                const key = (r.startDate || '') + '|' + (r.scheduleName || '행사명 미상');
+                if (!map.has(key)) map.set(key, { date: r.startDate || '', name: r.scheduleName || '행사명 미상', rows: [] });
+                map.get(key).rows.push(r);
+            });
+            return [...map.values()].sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
+        }
+        function openPickupTimeSurvey(focusName) {
+            document.getElementById('pt-survey-popup')?.remove();
+            const groups = ptGroups();
+            const body = groups.length === 0 ? '<div style="text-align:center;color:#94A3B8;font-size:13px;padding:30px 0">다가오는 공연장 수령 예약이 없어요</div>' : groups.map((g, gi) => {
+                const answered = g.rows.filter(r => r.pickupTimePref);
+                const waiting = g.rows.filter(r => !r.pickupTimePref);
+                // 고른 사람이 있는 시간만 (보기 순서 유지)
+                const counts = PT_OPTIONS.map(o => ({ o, n: answered.filter(r => r.pickupTimePref.split(', ').includes(o)).length })).filter(c => c.n > 0);
+                const max = Math.max(1, ...counts.map(c => c.n));
+                const top = counts.filter(c => c.o !== '시간 상관없어요' && c.n > 0).sort((a, b) => b.n - a.n)[0];
+                const d = g.date ? g.date.slice(5).replace('-', '/') : '';
+                return `
+                    <div data-pt-group="${escapeHtml(g.name)}" style="border:1px solid #E2E8F0;border-radius:12px;padding:14px;margin-top:${gi ? 10 : 0}px">
+                        <div style="display:flex;align-items:center;gap:6px">
+                            <b style="font-size:14px;color:#0F172A;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(d)} ${escapeHtml(g.name)}</b>
+                            <span style="font-size:12px;font-weight:800;color:${answered.length === g.rows.length ? '#059669' : '#0E7490'};white-space:nowrap">응답 ${answered.length}/${g.rows.length}</span>
+                        </div>
+                        ${top ? `<div style="font-size:12px;color:#0E7490;font-weight:700;margin-top:4px">가장 많이 고른 시간: ${escapeHtml(top.o)} (${top.n}명)</div>` : ''}
+                        <div style="margin-top:10px;display:flex;flex-direction:column;gap:5px">
+                            ${counts.length === 0 ? '<div style="font-size:12px;color:#94A3B8">아직 응답이 없어요</div>' : ''}
+                            ${counts.map(c => `
+                                <div style="display:flex;align-items:center;gap:8px;font-size:12px">
+                                    <span style="width:96px;flex-shrink:0;color:#334155;font-weight:700">${escapeHtml(c.o)}</span>
+                                    <span style="flex:1;height:8px;background:#F1F5F9;border-radius:99px;overflow:hidden"><span style="display:block;height:100%;width:${Math.round(c.n / max * 100)}%;background:#06B6D4;border-radius:99px"></span></span>
+                                    <b style="width:28px;text-align:right;color:#0F172A">${c.n}</b>
+                                </div>`).join('')}
+                        </div>
+                        <details style="margin-top:10px">
+                            <summary style="font-size:12px;font-weight:700;color:#64748B;cursor:pointer">명단 보기</summary>
+                            <div style="margin-top:6px;display:flex;flex-direction:column;gap:4px;font-size:12px">
+                                ${answered.map(r => `
+                                    <div style="background:#F8FAFC;border-radius:8px;padding:6px 8px">
+                                        <b style="color:#0F172A">${escapeHtml(r.name || '-')}</b> <span style="color:#94A3B8">${escapeHtml(r.phone || '')}</span>
+                                        <div style="color:#0E7490;font-weight:700">${escapeHtml(r.pickupTimePref)}</div>
+                                        ${r.pickupTimeNote ? `<div style="color:#475569">💬 ${escapeHtml(r.pickupTimeNote)}</div>` : ''}
+                                    </div>`).join('')}
+                                ${waiting.length ? `<div style="color:#94A3B8;padding:2px 2px 0">미응답 ${waiting.length}명: ${waiting.map(r => escapeHtml(r.name || '-')).join(', ')}</div>` : ''}
+                            </div>
+                        </details>
+                    </div>`;
+            }).join('');
+            const wrap = document.createElement('div');
+            wrap.id = 'pt-survey-popup';
+            wrap.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:16px';
+            wrap.innerHTML = `
+                <div style="background:#fff;border-radius:16px;width:100%;max-width:440px;max-height:86vh;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.2)">
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px 10px">
+                        <b style="font-size:17px;color:#0F172A">🕒 공연장 수령 시간 조사</b>
+                        <button type="button" data-close style="font-size:22px;line-height:1;color:#94A3B8;padding:2px 6px">×</button>
+                    </div>
+                    <div style="padding:0 20px 12px;display:flex;gap:6px;align-items:center">
+                        <span style="flex:1;min-width:0;font-size:12px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${PT_SURVEY_URL}</span>
+                        <button type="button" data-copy style="font-size:12px;font-weight:700;color:#0E7490;border:1px solid #67E8F9;background:#fff;border-radius:6px;padding:4px 10px;white-space:nowrap">조사 링크 복사</button>
+                    </div>
+                    <div style="overflow-y:auto;padding:0 20px 20px">${body}</div>
+                </div>`;
+            wrap.addEventListener('click', e => {
+                if (e.target === wrap || e.target.closest('[data-close]')) wrap.remove();
+                if (e.target.closest('[data-copy]')) {
+                    navigator.clipboard.writeText(PT_SURVEY_URL).then(() => showToast('조사 링크를 복사했어요'), () => showToast('복사하지 못했어요'));
+                }
+            });
+            document.body.appendChild(wrap);
+            if (focusName) {
+                const el = [...wrap.querySelectorAll('[data-pt-group]')].find(x => x.dataset.ptGroup === focusName);
+                if (el) { el.style.borderColor = '#06B6D4'; el.querySelector('details').open = true; el.scrollIntoView({ block: 'center' }); }
+            }
         }
     </script>
 </body>
