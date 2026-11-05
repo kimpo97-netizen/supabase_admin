@@ -685,6 +685,7 @@
                         <button onclick="openVenueGuideForSelected()" class="text-[13px] font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-4 py-2 rounded-lg transition-colors border border-indigo-200 flex items-center gap-1.5 shadow-sm">📍 공연장 안내</button>
                         <button onclick="bulkSendAlimtalk('identity_verify')" class="text-[13px] font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-4 py-2 rounded-lg transition-colors border border-emerald-200 flex items-center gap-1.5 shadow-sm">🪪 인증</button>
                         <button onclick="bulkSendAlimtalk('return_tracking_request')" class="text-[13px] font-bold bg-pink-50 text-pink-700 hover:bg-pink-100 px-4 py-2 rounded-lg transition-colors border border-pink-200 flex items-center gap-1.5 shadow-sm" style="background:#FDF2F8;color:#BE185D;border-color:#FBCFE8">📮 등기번호 제출</button>
+                        <button onclick="bulkSendAlimtalk('notice_room')" class="text-[13px] font-bold px-4 py-2 rounded-lg transition-colors border flex items-center gap-1.5 shadow-sm hover:opacity-90" style="background:#FEFCE8;color:#854D0E;border-color:#FDE68A">📢 공지방</button>
                     </div>
 
                     <div class="flex flex-wrap items-center justify-start gap-2 w-full mt-1">
@@ -5961,6 +5962,8 @@
             identity_verify: { label: '본인 인증 요청', sentField: 'identityVerifySentAt' },
             // [NEW] 2026-11-04 등기번호 제출 안내 (반납 등기번호를 아직 안 알려준 고객에게)
             return_tracking_request: { label: '등기번호 제출 안내', sentField: 'returnTrackRequestSentAt' },
+            // [NEW] 2026-11-05 공지방 — 공연장 수령 안내(자세히 보기) 알림톡 KA01TP260803125615779ub8scUfDnZF (서버 템플릿 키 venue_guide)
+            notice_room: { label: '공지방(공연장 수령 안내)', sentField: 'noticeRoomSentAt', serverKey: 'venue_guide' },
         };
 
         function bulkSendAlimtalk(templateKey) {
@@ -6031,7 +6034,7 @@
                 async () => {
                     try {
                         const { data, error } = await sb.functions.invoke('send-alimtalk', {
-                            body: { templateKey, phones }
+                            body: { templateKey: tpl.serverKey || templateKey, phones }
                         });
                         if (error) throw error;
                         if (data && data.error) throw new Error(data.error);
@@ -8875,7 +8878,7 @@
         // + 설정에서 추가한 공연장(admin_settings.venue_custom), 숨긴 공연장(venue_disabled)은 뺀다
         const PT_VENUE_PLACES = {
             Seoul: [["고척 스카이돔","고척돔 주차장","서울 구로구 고척동 76-4 (구로성심병원 별관 맞은편)"],["티켓링크 아레나","동2문주차장","투썸플레이스 건너편 주차장"],["티켓링크 아레나","올림픽공원역 3번출구",""],["블루스퀘어","한강진역2번출구","2번출구 지상 입구쪽"],["잠실 실내체육관","종합운동장역7번출구","7번출구 지상 입구쪽"],["KSPO DOME","동2문주차장","투썸플레이스 건너편 주차장"],["KSPO DOME","올림픽공원역 3번출구",""],["고려대 화정체육관","안암역1번출구","1번출구 지상 입구쪽"],["장충체육관","동대입구역5번출구","5번출구 지상 입구쪽"],["예스24 라이브","광나루역2번출구","2번출구 지상 입구"],["코엑스","봉은사역1번출구","1번출구 지상 입구쪽"],["KBS아레나","KBS아레나 주차장","서울 강서구 화곡로 376 KBS아레나 주차장"]],
-            Incheon: [["인스파이어 아레나","인스파이어 버스정류장","정류장번호: 35900 (풍림1차205동 방면)"],["아시아드 주경기장","홀리빈카페","카페 입구 도로변"],["문학경기장","인천SSG 랜더스필드주차장","주차장 입구 주변 버스정류장"],["송도컨벤시아","인천대입구역4번출구","입구쪽 버스정류장 앞"]],
+            Incheon: [["인스파이어 아레나","인스파이어 1번 장소",""],["인스파이어 아레나","인스파이어 2번 장소",""],["아시아드 주경기장","홀리빈카페","카페 입구 도로변"],["문학경기장","인천SSG 랜더스필드주차장","주차장 입구 주변 버스정류장"],["송도컨벤시아","인천대입구역4번출구","입구쪽 버스정류장 앞"]],
             Gyeonggi: [["고양 종합운동장","대화역3번출구","입구쪽 세븐일레븐 앞"],["킨텍스","킨텍스역 1번출구","1번출구 지상 입구쪽"]]
         };
         function ptVenueChoices() {
