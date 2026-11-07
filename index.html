@@ -686,6 +686,7 @@
                         <button onclick="bulkSendAlimtalk('identity_verify')" class="text-[13px] font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-4 py-2 rounded-lg transition-colors border border-emerald-200 flex items-center gap-1.5 shadow-sm">🪪 인증</button>
                         <button onclick="bulkSendAlimtalk('return_tracking_request')" class="text-[13px] font-bold bg-pink-50 text-pink-700 hover:bg-pink-100 px-4 py-2 rounded-lg transition-colors border border-pink-200 flex items-center gap-1.5 shadow-sm" style="background:#FDF2F8;color:#BE185D;border-color:#FBCFE8">📮 등기번호 제출</button>
                         <button onclick="bulkSendAlimtalk('notice_room')" class="text-[13px] font-bold px-4 py-2 rounded-lg transition-colors border flex items-center gap-1.5 shadow-sm hover:opacity-90" style="background:#FEFCE8;color:#854D0E;border-color:#FDE68A">📢 공지방</button>
+                        <button onclick="bulkSendAlimtalk('pickup_time_request')" class="text-[13px] font-bold px-4 py-2 rounded-lg transition-colors border flex items-center gap-1.5 shadow-sm hover:opacity-90" style="background:#F0F9FF;color:#0369A1;border-color:#BAE6FD">🕒 수령시간조사</button>
                     </div>
 
                     <div class="flex flex-wrap items-center justify-start gap-2 w-full mt-1">
@@ -5964,20 +5965,37 @@
             return_tracking_request: { label: '등기번호 제출 안내', sentField: 'returnTrackRequestSentAt' },
             // [NEW] 2026-11-05 공지방 — 공연장 수령 안내(자세히 보기) 알림톡 KA01TP260803125615779ub8scUfDnZF (서버 템플릿 키 venue_guide)
             notice_room: { label: '공지방(공연장 수령 안내)', sentField: 'noticeRoomSentAt', serverKey: 'venue_guide' },
+            // [NEW] 2026-11-07 수령 희망 시간 선택 안내 알림톡 KA01TP261104132315455IZo3aQyCcmI ([희망 시간 선택하기] 버튼은 템플릿 고정 링크)
+            pickup_time_request: { label: '수령 희망 시간 선택 안내', sentField: 'pickupTimeRequestSentAt', skipIfField: 'pickupTimePref', skipLabel: '이미 수령 희망 시간을 응답한' },
         };
 
+        // [NEW] 2026-11-07 발송 대상에서 자동으로 뺀 고객 안내 문구 (예: 이미 수령시간 조사에 응답한 고객)
+        let alimtalkSkipNote = '';
         function bulkSendAlimtalk(templateKey) {
             if (selectedRows.length === 0) return;
             const tpl = ALIMTALK_TEMPLATES[templateKey];
             if (!tpl) return;
+            alimtalkSkipNote = '';
 
-            const items = selectedRows
+            let items = selectedRows
                 .map(rowId => allData.find(item => String(item.row) === String(rowId)))
                 .filter(item => item && item.phone);
 
             if (items.length === 0) {
                 showAppAlert("선택한 건에 유효한 연락처가 없습니다.", "🚨 발송 불가", "⚠️");
                 return;
+            }
+
+            // [NEW] 2026-11-07 수령시간조사: 이미 희망 시간을 응답한 고객에게는 보내지 않음
+            if (tpl.skipIfField) {
+                const before = items.length;
+                items = items.filter(item => !String(item[tpl.skipIfField] || '').trim());
+                const skipped = before - items.length;
+                if (items.length === 0) {
+                    showAppAlert(`선택한 ${before}건 모두 ${tpl.skipLabel} 고객이라 보낼 대상이 없어요.`, "발송할 고객 없음", "✅");
+                    return;
+                }
+                if (skipped > 0) alimtalkSkipNote = `\n(${tpl.skipLabel} ${skipped}건은 제외)`;
             }
 
             const alreadySentCount = items.filter(item => item[tpl.sentField]).length;
@@ -5994,7 +6012,7 @@
             const unsentCount = items.length - alreadySentCount;
             setupModal(
                 "이미 발송한 건 포함",
-                `선택한 ${items.length}건 중 ${alreadySentCount}건은 이미 '${tpl.label}' 알림톡을 받았습니다.\n어떻게 발송할까요?`,
+                `선택한 ${items.length}건 중 ${alreadySentCount}건은 이미 '${tpl.label}' 알림톡을 받았습니다.\n어떻게 발송할까요?${alimtalkSkipNote}`,
                 "🤔",
                 `
                 <div class="flex flex-col gap-2 mt-2">
@@ -6030,7 +6048,7 @@
             }
 
             showAppConfirm(
-                `${items.length}건(연락처 ${phones.length}명)에게\n'${tpl.label}' 알림톡을 발송하시겠습니까?`,
+                `${items.length}건(연락처 ${phones.length}명)에게\n'${tpl.label}' 알림톡을 발송하시겠습니까?${alimtalkSkipNote}`,
                 async () => {
                     try {
                         const { data, error } = await sb.functions.invoke('send-alimtalk', {
@@ -9017,7 +9035,9 @@
         }
         function openPickupTimeSurvey(focusName) {
             document.getElementById('pt-survey-popup')?.remove();
-            const groups = ptGroups();
+            // [NEW] 2026-11-07 지난 날짜(공연일이 오늘 이전) 공연은 숨김
+            const ptToday = ptTodayStr();
+            const groups = ptGroups().filter(g => !g.date || g.date >= ptToday);
             window.__ptGroups = groups;
             const body = groups.length === 0 ? '<div style="text-align:center;color:#94A3B8;font-size:13px;padding:30px 0">다가오는 공연장 수령 예약이 없어요</div>' : groups.map((g, gi) => {
                 const answered = g.rows.filter(r => r.pickupTimePref);
@@ -9028,7 +9048,7 @@
                 const top = counts.filter(c => c.o !== '시간 상관없어요' && c.n > 0).sort((a, b) => b.n - a.n)[0];
                 const d = g.date ? g.date.slice(5).replace('-', '/') : '';
                 return `
-                    <div data-pt-group="${escapeHtml(g.name)}" style="border:1px solid #E2E8F0;border-radius:12px;padding:14px;margin-top:${gi ? 10 : 0}px">
+                    <div data-pt-group="${escapeHtml(g.name)}" data-pt-date="${escapeHtml(g.date)}" style="border:1px solid #E2E8F0;border-radius:12px;padding:14px">
                         <div style="display:flex;align-items:center;gap:6px">
                             <b style="font-size:14px;color:#0F172A;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(d)} ${escapeHtml(g.name)}</b>
                             <span style="font-size:12px;font-weight:800;color:${answered.length === g.rows.length ? '#059669' : '#0E7490'};white-space:nowrap">응답 ${answered.length}/${g.rows.length}</span>
@@ -9071,10 +9091,44 @@
                         <span style="flex:1;min-width:0;font-size:12px;color:#64748B;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${PT_SURVEY_URL}</span>
                         <button type="button" data-copy style="font-size:12px;font-weight:700;color:#0E7490;border:1px solid #67E8F9;background:#fff;border-radius:6px;padding:4px 10px;white-space:nowrap">조사 링크 복사</button>
                     </div>
-                    <div style="overflow-y:auto;padding:0 20px 20px">${body}</div>
+                    ${groups.length ? `<div style="padding:0 20px 12px;display:flex;gap:6px;align-items:center">
+                        <button type="button" data-pt-all style="font-size:12px;font-weight:800;border-radius:8px;padding:7px 10px;white-space:nowrap;border:1px solid #0891B2"></button>
+                        <select data-pt-fname style="flex:1;min-width:0;font-size:12px;font-weight:700;color:#0F172A;border:1px solid #CBD5E1;border-radius:8px;padding:6px 6px;background:#fff">
+                            <option value="">공연명 전체</option>
+                            ${[...new Set(groups.map(g => g.name))].sort((a, b) => a.localeCompare(b)).map(n => `<option value="${escapeHtml(n)}">${escapeHtml(n)}</option>`).join('')}
+                        </select>
+                        <select data-pt-fdate style="width:104px;flex-shrink:0;font-size:12px;font-weight:700;color:#0F172A;border:1px solid #CBD5E1;border-radius:8px;padding:6px 6px;background:#fff">
+                            <option value="">날짜 전체</option>
+                            ${[...new Set(groups.map(g => g.date).filter(Boolean))].sort().map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d.slice(5).replace('-', '/'))} (${'일월화수목금토'[new Date(d + 'T00:00:00').getDay()]})</option>`).join('')}
+                        </select>
+                    </div>` : ''}
+                    <div style="overflow-y:auto;padding:0 20px 20px;display:flex;flex-direction:column;gap:10px">${body}<div data-pt-empty style="display:none;text-align:center;color:#94A3B8;font-size:13px;padding:30px 0">조건에 맞는 공연이 없어요</div></div>
                 </div>`;
+            // [NEW] 2026-11-07 공연명·날짜 필터 + 전체보기
+            const ptApplyFilter = () => {
+                const fn = wrap.querySelector('[data-pt-fname]'), fd = wrap.querySelector('[data-pt-fdate]');
+                if (!fn) return;
+                let shown = 0;
+                wrap.querySelectorAll('[data-pt-group]').forEach(el => {
+                    const ok = (!fn.value || el.dataset.ptGroup === fn.value) && (!fd.value || el.dataset.ptDate === fd.value);
+                    el.style.display = ok ? '' : 'none';
+                    if (ok) shown++;
+                });
+                wrap.querySelector('[data-pt-empty]').style.display = shown ? 'none' : '';
+                const all = !fn.value && !fd.value;
+                const ab = wrap.querySelector('[data-pt-all]');
+                ab.textContent = all ? '전체보기' : '전체보기 ↺';
+                ab.style.background = all ? '#0891B2' : '#fff';
+                ab.style.color = all ? '#fff' : '#0E7490';
+            };
+            wrap.addEventListener('change', e => { if (e.target.closest('[data-pt-fname],[data-pt-fdate]')) ptApplyFilter(); });
             wrap.addEventListener('click', e => {
                 if (e.target === wrap || e.target.closest('[data-close]')) wrap.remove();
+                if (e.target.closest('[data-pt-all]')) {
+                    wrap.querySelector('[data-pt-fname]').value = '';
+                    wrap.querySelector('[data-pt-fdate]').value = '';
+                    ptApplyFilter();
+                }
                 const alimBtn = e.target.closest('[data-pt-alim]');
                 if (alimBtn) openPtAlimtalkForm(alimBtn.dataset.ptAlim);
                 if (e.target.closest('[data-copy]')) {
@@ -9082,6 +9136,7 @@
                 }
             });
             document.body.appendChild(wrap);
+            ptApplyFilter();
             if (focusName) {
                 const el = [...wrap.querySelectorAll('[data-pt-group]')].find(x => x.dataset.ptGroup === focusName);
                 if (el) { el.style.borderColor = '#06B6D4'; el.querySelector('details').open = true; el.scrollIntoView({ block: 'center' }); }
