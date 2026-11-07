@@ -8885,6 +8885,8 @@
             const names = [...new Set(rows.map(r => r.scheduleName).filter(Boolean))];
             const dates = [...new Set(rows.map(r => r.startDate).filter(Boolean))];
             openPtAlimtalkForm({
+                // [NEW] 2026-11-07 한 공연만 골랐으면 그 공연에 지난번 보낸 안내를 불러오도록 key를 넘김
+                key: dates.length === 1 && names.length === 1 ? dates[0] + '|' + names[0] : '',
                 date: dates.length === 1 ? dates[0] : '',
                 name: names.length === 1 ? names[0] : `선택한 예약 ${rows.length}건`,
                 rows,
@@ -8915,11 +8917,37 @@
         }
         // 알림톡 #{수령장소}에 들어갈 문구: '고척돔 주차장 · 서울 구로구 …'
         const ptVenuePlaceText = v => v.place + (v.detail ? ` · ${v.detail}` : '');
-        function openPtAlimtalkForm(key) {
-            // key: 수령시간 조사 팝업의 공연 key, 또는 { date, name, rows, onSent } (상단 공연장 안내 버튼)
+        // [NEW] 2026-11-07 공연별로 마지막에 보낸 공연장 안내(장소·시간·안내)를 admin_settings.venue_guide_last 에 기억
+        //  → 새 예약자에게 보낼 때 다시 적지 않도록 폼을 자동으로 채운다 (PC·모바일 공용)
+        async function ptLoadVenueGuideLast() {
+            try {
+                const { data, error } = await sb.from('admin_settings').select('value').eq('key', 'venue_guide_last').maybeSingle();
+                if (error) throw error;
+                const map = (data && data.value) || {};
+                adminSettings.venue_guide_last = map;
+                return map;
+            } catch (e) {
+                console.error('지난 공연장 안내 불러오기 실패', e);
+                return (typeof adminSettings !== 'undefined' && adminSettings && adminSettings.venue_guide_last) || {};
+            }
+        }
+        function ptSaveVenueGuideLast(gkey, info) {
+            if (!gkey) return;
+            const today = ptTodayStr();
+            const map = { ...(adminSettings.venue_guide_last || {}) };
+            Object.keys(map).forEach(k => { const d = k.split('|')[0]; if (d && d < today) delete map[k]; }); // 지난 공연은 정리
+            map[gkey] = info;
+            adminSettings.venue_guide_last = map;
+            if (typeof settingsDraft !== 'undefined' && settingsDraft) settingsDraft.venue_guide_last = map;
+            sb.from('admin_settings').upsert({ key: 'venue_guide_last', value: map, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+                .then(({ error }) => { if (error) console.error('공연장 안내 기억 저장 실패', error); });
+        }
+        async function openPtAlimtalkForm(key) {
+            // key: 수령시간 조사 팝업의 공연 key, 또는 { key, date, name, rows, onSent } (상단 공연장 안내 버튼)
             const g = typeof key === 'object' ? key : (window.__ptGroups || []).find(x => x.key === key);
             if (!g) return;
             document.getElementById('pt-alim-popup')?.remove();
+            const last = g.key ? ((await ptLoadVenueGuideLast())[g.key] || null) : null;
             const answered = g.rows.filter(r => r.pickupTimePref);
             const top = PT_OPTIONS.filter(o => o !== '시간 상관없어요')
                 .map(o => ({ o, n: answered.filter(r => r.pickupTimePref.split(', ').includes(o)).length }))
@@ -8932,7 +8960,8 @@
             const venues = ptVenueChoices();
             const flatVenues = Object.values(venues).flat();
             const hay = g.rows.map(r => `${r.address || ''} ${r.scheduleName || ''}`).join(' ');
-            const guessIdx = flatVenues.map((v, i) => ({ v, i })).filter(x => hay.includes(x.v.name)).sort((a, b) => b.v.name.length - a.v.name.length).map(x => x.i)[0];
+            const lastIdx = last ? flatVenues.findIndex(v => ptVenuePlaceText(v) === last.place) : -1;
+            const guessIdx = lastIdx >= 0 ? lastIdx : flatVenues.map((v, i) => ({ v, i })).filter(x => hay.includes(x.v.name)).sort((a, b) => b.v.name.length - a.v.name.length).map(x => x.i)[0];
             let vi = 0;
             const venueOptions = Object.keys(venues).map(region => `<optgroup label="${{ Seoul: '서울', Incheon: '인천', Gyeonggi: '경기' }[region] || region}">${venues[region].map(v => `<option value="${vi}"${vi++ === guessIdx ? ' selected' : ''}>${escapeHtml(v.name)} — ${escapeHtml(v.place)}</option>`).join('')}</optgroup>`).join('');
             const tabBtn = on => `flex:1;font-size:13px;font-weight:800;border-radius:7px;padding:7px 0;${on ? 'background:#fff;color:#0E7490;box-shadow:0 1px 2px rgba(0,0,0,.08)' : 'background:transparent;color:#64748B'}`;
@@ -8946,6 +8975,7 @@
                         <button type="button" data-close style="font-size:22px;line-height:1;color:#94A3B8;padding:2px 6px">×</button>
                     </div>
                     <div style="font-size:12px;color:#64748B;margin-top:4px">${escapeHtml((g.date ? g.date.slice(5).replace('-', '/') + ' ' : '') + g.name)} · ${g.onSent ? '선택' : '공연장 수령'} ${withPhone.length}명</div>
+                    ${last ? `<div style="background:#ECFEFF;border:1px solid #A5F3FC;border-radius:10px;padding:8px 10px;margin-top:10px;font-size:12px;color:#0E7490;font-weight:700;line-height:1.5">✅ ${escapeHtml(last.sentAt ? new Date(last.sentAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '지난번')}에 보낸 안내로 채워뒀어요<br><span style="font-weight:600">새로 예약한 분께는 그대로 [보내기]만 누르면 돼요</span></div>` : ''}
                     <label style="${lab}">수령 장소 *</label>
                     <div style="display:flex;gap:4px;background:#F1F5F9;border-radius:9px;padding:3px;margin-bottom:6px">
                         <button type="button" data-pm="pick" style="${tabBtn(true)}">픽업존에서 선택</button>
@@ -8959,10 +8989,10 @@
                         <input data-f="place" maxlength="80" placeholder="예) 올림픽공원 핸드볼경기장 3번 출입구 앞" style="${inp}">
                     </div>
                     <label style="${lab}">수령 시간 *</label>
-                    <input data-f="time" maxlength="40" value="${escapeHtml(top ? ptTimeLabel(top.o) : '')}" placeholder="예) 오후 3:30" style="${inp}">
-                    ${top ? `<div style="font-size:11px;color:#0E7490;margin-top:3px">가장 많이 고른 시간 ${escapeHtml(ptTimeLabel(top.o))} (${top.n}명)으로 채워뒀어요</div>` : ''}
+                    <input data-f="time" maxlength="40" value="${escapeHtml(last ? last.time : top ? ptTimeLabel(top.o) : '')}" placeholder="예) 오후 3:30" style="${inp}">
+                    ${top && !last ? `<div style="font-size:11px;color:#0E7490;margin-top:3px">가장 많이 고른 시간 ${escapeHtml(ptTimeLabel(top.o))} (${top.n}명)으로 채워뒀어요</div>` : ''}
                     <label style="${lab}">안내사항</label>
-                    <textarea data-f="note" maxlength="200" rows="2" placeholder="예) 도착하시면 카카오톡으로 연락 주세요" style="${inp};resize:none"></textarea>
+                    <textarea data-f="note" maxlength="200" rows="2" placeholder="예) 도착하시면 카카오톡으로 연락 주세요" style="${inp};resize:none">${escapeHtml(last && last.note && last.note !== '-' ? last.note : '')}</textarea>
                     <div style="font-size:11px;color:#94A3B8;margin-top:8px">[수령장소 오시는 길] 버튼은 serincam.com/?page=venue-pickup 으로 연결돼요</div>
                     ${sentCount ? `<label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#334155;margin-top:12px"><input type="checkbox" data-f="unsent" checked> 이미 안내 받은 ${sentCount}명은 빼고 보내기</label>` : ''}
                     <div style="background:#FEF9C3;border-radius:10px;padding:12px;margin-top:14px;font-size:12.5px;line-height:1.6;color:#1E293B;white-space:pre-line" data-preview></div>
@@ -9015,6 +9045,7 @@
                     const nowIso = new Date().toISOString();
                     const sentRows = list.filter(r => okPhones.has(String(r.phone).replace(/[^0-9]/g, '')));
                     sentRows.forEach(r => { r.venueGuideSentAt = nowIso; });
+                    if (sentRows.length) ptSaveVenueGuideLast(g.key, { place, time, note, sentAt: nowIso });
                     await Promise.all(sentRows.map(r => sb.from('reservations').update({ venueGuideSentAt: nowIso }).eq('id', Number(r.row || r.id)))).catch(err => console.error('venueGuideSentAt 저장 실패', err));
                     wrap.remove();
                     if (g.onSent) g.onSent();
@@ -9031,7 +9062,8 @@
                 }
             });
             document.body.appendChild(wrap);
-            f('venue').focus();
+            if (last && lastIdx < 0 && last.place) { f('place').value = last.place; setPlaceMode('manual'); }
+            else f('venue').focus();
         }
         function openPickupTimeSurvey(focusName) {
             document.getElementById('pt-survey-popup')?.remove();
@@ -9054,7 +9086,7 @@
                             <span style="font-size:12px;font-weight:800;color:${answered.length === g.rows.length ? '#059669' : '#0E7490'};white-space:nowrap">응답 ${answered.length}/${g.rows.length}</span>
                         </div>
                         ${top ? `<div style="font-size:12px;color:#0E7490;font-weight:700;margin-top:4px">가장 많이 고른 시간: ${escapeHtml(top.o)} (${top.n}명)</div>` : ''}
-                        <button type="button" data-pt-alim="${escapeHtml(g.key)}" style="margin-top:8px;width:100%;font-size:13px;font-weight:800;color:#fff;background:#0891B2;border-radius:8px;padding:8px">📨 알림톡 보내기${g.rows.some(r => r.venueGuideSentAt) ? ` <span style="font-weight:600;opacity:.85">(안내 보냄 ${g.rows.filter(r => r.venueGuideSentAt).length}/${g.rows.length})</span>` : ''}</button>
+                        <button type="button" data-pt-alim="${escapeHtml(g.key)}" style="margin-top:8px;width:100%;font-size:13px;font-weight:800;color:#fff;background:#0891B2;border-radius:8px;padding:8px">${(() => { const s = g.rows.filter(r => r.venueGuideSentAt).length, u = g.rows.length - s; return s && u ? `📨 새 예약 ${u}명에게 안내 보내기 <span style="font-weight:600;opacity:.85">(보냄 ${s}/${g.rows.length})</span>` : `📨 알림톡 보내기${s ? ` <span style="font-weight:600;opacity:.85">(안내 보냄 ${s}/${g.rows.length})</span>` : ''}`; })()}</button>
                         <div style="margin-top:10px;display:flex;flex-direction:column;gap:5px">
                             ${counts.length === 0 ? '<div style="font-size:12px;color:#94A3B8">아직 응답이 없어요</div>' : ''}
                             ${counts.map(c => `
