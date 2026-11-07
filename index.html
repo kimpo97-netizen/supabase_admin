@@ -8976,6 +8976,7 @@
                     </div>
                     <div style="font-size:12px;color:#64748B;margin-top:4px">${escapeHtml((g.date ? g.date.slice(5).replace('-', '/') + ' ' : '') + g.name)} · ${g.onSent ? '선택' : '공연장 수령'} ${withPhone.length}명</div>
                     ${last ? `<div style="background:#ECFEFF;border:1px solid #A5F3FC;border-radius:10px;padding:8px 10px;margin-top:10px;font-size:12px;color:#0E7490;font-weight:700;line-height:1.5">✅ ${escapeHtml(last.sentAt ? new Date(last.sentAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '지난번')}에 보낸 안내로 채워뒀어요<br><span style="font-weight:600">새로 예약한 분께는 그대로 [보내기]만 누르면 돼요</span></div>` : ''}
+                    ${!last && sentCount ? `<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;padding:8px 10px;margin-top:10px;font-size:12px;color:#C2410C;font-weight:700;line-height:1.5">이 공연은 이전에 보낸 안내 내용이 저장돼 있지 않아요<br><span style="font-weight:600">이번에 한 번 보내면 다음부터 자동으로 채워져요</span></div>` : ''}
                     <label style="${lab}">수령 장소 *</label>
                     <div style="display:flex;gap:4px;background:#F1F5F9;border-radius:9px;padding:3px;margin-bottom:6px">
                         <button type="button" data-pm="pick" style="${tabBtn(true)}">픽업존에서 선택</button>
