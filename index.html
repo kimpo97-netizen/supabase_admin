@@ -8989,6 +8989,7 @@
                 const fav = (await ptLoadVenueGuideFavs()).filter(x => ptFavMatches(x, r))
                     .sort((a, b) => String(b.savedAt || '').localeCompare(String(a.savedAt || '')))[0];
                 if (!fav) return;
+                await new Promise(res => setTimeout(res, 5000)); // [NEW] 2026-11-14 확정 안내가 먼저 도착하도록 확정 5초 뒤에 보냄
                 const id = Number(r.row || r.id);
                 // 그사이 다른 곳(자동 입금확인 등)에서 이미 보냈으면 건너뜀
                 const { data: cur } = await sb.from('reservations').select('venueGuideSentAt').eq('id', id).maybeSingle();
