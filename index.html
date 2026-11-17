@@ -254,6 +254,19 @@
 
         /* [NEW] 좌측 드로어의 현황 카드(재고 부족 임박/이번주 예약 인원 등)를 헤더에서 옆으로 스와이프해서 보는 목록.
            카드마다 제목 줄을 없애고 내용 한 줄만 남겨서 세로폭을 최소화했습니다. */
+        /* [2026-11-15] 신규 예약은 카드 대신 알약(svc-mini)으로만 표시 */
+        #card-new-reservation { display: none !important; }
+        .hdr-row1 .hdr-search { flex: 0 1 52%; min-width: 0; margin-left: auto; }
+        .hdr-row1 .hdr-search input { padding: 8px 0; font-size: 13px; }
+        .hdr-chips .hdr-chip.hidden { display: none !important; }
+        .low-stock-pop {
+            position: fixed; z-index: 70; left: 10px; right: 10px; max-width: 420px; max-height: 60vh; overflow-y: auto;
+            background: #fff; border: 1px solid #fecdd3; border-radius: 16px; padding: 10px;
+            box-shadow: 0 12px 32px -8px rgba(30,27,75,0.25);
+        }
+        .low-stock-pop.hidden { display: none !important; }
+        .low-stock-pop-title { font-size: 13px; font-weight: 900; color: #be123c; padding: 2px 4px 8px; }
+        .low-stock-pop-title span { display: block; font-size: 10.5px; font-weight: 700; color: #94a3b8; margin-top: 2px; }
         .hdr-card-scroll {
             display: flex; align-items: flex-start; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px;
             overflow-anchor: none; /* [FIX] 카드가 로딩 중 숨겨졌다 나타났다 하면서 스크롤 위치가 밀리는 문제 방지 */
@@ -426,33 +439,23 @@
     <!-- 상단 헤더 (모바일) -->
     <header id="app-header">
       <div class="hdr-inner">
+        <!-- [2026-11-15 개편] 1줄: 제목 · 검색(절반) · 실행기록 · 설정 / 2줄: 알약 버튼(정렬·달력·초기화·신규·품절 등) -->
         <div class="hdr-row1">
-            <button class="hdr-icon-btn hdr-menu" onclick="openFilterDrawer()" aria-label="필터 열기">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="14" y1="12" y2="12"/><line x1="4" x2="18" y1="18" y2="18"/></svg>
-            </button>
             <span class="hdr-title"><span class="hdr-title-text">세린캠</span></span>
-            <button id="hdr-quick-menu-btn" class="hdr-icon-btn hdr-menu" onclick="toggleQuickMenu()" aria-label="설정 메뉴">⚙️</button>
-            <button class="hdr-icon-btn hdr-refresh" onclick="fetchData()" aria-label="최신 정보 불러오기">
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
-            </button>
-            <button class="hdr-icon-btn hdr-primary" onclick="openAddModal()" aria-label="예약 생성">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-            </button>
-        </div>
-
-        <div class="hdr-row2">
             <div class="hdr-search">
                 <svg class="shrink-0" style="color:#a5b4fc" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                <input type="text" id="search-input" onkeyup="debouncedFilter()" placeholder="검색 (이름, 송장, 메모)">
+                <input type="text" id="search-input" onkeyup="debouncedFilter()" placeholder="이름·송장·메모">
             </div>
-            <button class="hdr-sort" onclick="toggleSortMode()">정렬<span id="sort-mode-text">최신순</span></button>
+            <button class="hdr-icon-btn hdr-menu" onclick="openActionLog()" aria-label="실행 기록">📜</button>
+            <button id="hdr-quick-menu-btn" class="hdr-icon-btn hdr-menu" onclick="toggleQuickMenu()" aria-label="설정 메뉴">⚙️</button>
         </div>
 
-        <div id="svc-mini-container" class="hdr-chips no-scrollbar"></div>
-
         <div class="hdr-chips no-scrollbar">
+            <button class="hdr-chip chip-slate" onclick="toggleSortMode()">↕ <span id="sort-mode-text">최신순</span></button>
             <button onclick="openCalendarModal()" class="hdr-chip chip-indigo">📅 달력검색</button>
             <button onclick="resetAllFilters()" class="hdr-chip chip-slate">🔄 필터초기화</button>
+            <button id="low-stock-pill" type="button" onclick="toggleLowStockPopover(event)" class="hdr-chip chip-rose hidden">⚠️ <span id="low-stock-pill-text">품절</span></button>
+            <div id="svc-mini-container" style="display:contents"></div>
         </div>
 
         <!-- [NEW] 좌측 드로어 안에 있던 현황 카드들을 여기로 옮겨서, 드로어를 열지 않아도 옆으로 스와이프해서 바로 볼 수 있게 함 -->
@@ -490,11 +493,6 @@
                 </div>
             </div>
 
-            <!-- [NEW] 재고 부족 임박 (재고 5대 이하) — 제목 줄 없이 내용만 (세로폭 최소화) -->
-            <div id="low-stock-section" class="hidden bg-rose-50 p-2.5 rounded-2xl shadow-sm border border-rose-200">
-                <div id="low-stock-list" class="space-y-1.5"></div>
-            </div>
-
             <!-- 당일 반납 현황 필터 — 제목/전체보기 버튼 없이 내용만 -->
             <div class="bg-rose-50 p-2.5 rounded-2xl shadow-sm border border-rose-200">
                 <div id="return-upcoming-filters-container" class="space-y-2"></div>
@@ -510,6 +508,12 @@
          header 안에 두면 header의 backdrop-filter가 position:fixed의 기준을 header로 바꿔버려서
          화면 전체를 덮지 못하는 문제가 있어 header 바깥(body 바로 아래)에 둡니다. -->
     <div id="hdr-quick-backdrop" class="hidden hdr-quick-backdrop" onclick="closeQuickMenu()"></div>
+    <!-- [NEW] 품절·재고 부족 알약을 누르면 뜨는 목록 (header 밖에 둬야 position:fixed가 화면 기준으로 잡힘) -->
+    <div id="low-stock-backdrop" class="hidden hdr-quick-backdrop" onclick="closeLowStockPopover()"></div>
+    <div id="low-stock-section" class="hidden low-stock-pop">
+        <div class="low-stock-pop-title">품절·재고 부족 모델 <span>날짜 탭 = 해당 예약 보기 · 잔여 탭 = 수량 조정</span></div>
+        <div id="low-stock-list" class="space-y-1.5"></div>
+    </div>
     <div id="hdr-quick-menu" class="hidden hdr-quick-menu">
         <button class="hdr-quick-item" onclick="closeQuickMenu(); openSettings();"><span class="hdr-quick-ico" style="background:#eef2ff; color:#4f46e5;">⚙️</span> 설정</button>
         <button class="hdr-quick-item" onclick="closeQuickMenu(); openPushSettings();"><span class="hdr-quick-ico" style="background:#ecfeff; color:#0891b2;">🔔</span> 예약 알림<span class="apn-badge">꺼짐</span></button>
@@ -1084,6 +1088,272 @@
                 hdrCardsCollapsed = false;
             }
         }, { passive: true });
+
+        // ===================== [NEW] 품절·재고 부족 알약 팝오버 =====================
+        function toggleLowStockPopover(e) {
+            const pop = document.getElementById('low-stock-section');
+            if (!pop) return;
+            if (!pop.classList.contains('hidden')) { closeLowStockPopover(); return; }
+            const btn = document.getElementById('low-stock-pill');
+            if (btn) {
+                const rect = btn.getBoundingClientRect();
+                pop.style.top = (rect.bottom + 8) + 'px';
+            }
+            pop.classList.remove('hidden');
+            document.getElementById('low-stock-backdrop').classList.remove('hidden');
+        }
+        function closeLowStockPopover() {
+            const pop = document.getElementById('low-stock-section');
+            if (pop) pop.classList.add('hidden');
+            const bd = document.getElementById('low-stock-backdrop');
+            if (bd) bd.classList.add('hidden');
+        }
+        // 목록 안의 버튼(해당 예약 보기 / 수량 조정)을 누르면 팝오버는 닫고 원래 동작 실행
+        document.addEventListener('click', (e) => {
+            if (e.target.closest('#low-stock-list button')) setTimeout(closeLowStockPopover, 0);
+        }, true); // 캡처 단계: 버튼 동작이 목록을 다시 그리기 전에 판정
+
+        // ===================== [NEW] 실행 기록(감사 로그) · 실행취소 =====================
+        // 관리자가 수행한 주요 작업(상태변경/삭제/수정/등록/설정변경 등)을 admin_action_logs 테이블에 남기고,
+        // "실행취소" 시 저장해둔 이전 상태(before_data)로 되돌립니다.
+        let actionLogs = [];
+
+        // allData/trashItems의 항목은 mapRecord()가 화면용으로 덧붙인 별칭 필드(row/zipCode/returnWay/sheetName)를 갖고 있어
+        // 그대로 DB에 써넣으면 안 되므로, 원본 DB 컬럼만 남기고 정리합니다.
+        function toRawReservation(mappedItem) {
+            if (!mappedItem) return null;
+            const { row, zipCode, returnWay, sheetName, ...rest } = mappedItem;
+            return rest;
+        }
+
+        function namesSummary(items, nameKey = 'name') {
+            if (!items || items.length === 0) return '';
+            const first = items[0][nameKey] || items[0].row || items[0].id || '이름없음';
+            return items.length > 1 ? `${first} 외 ${items.length - 1}건` : `${first}`;
+        }
+
+        // 작업 성공 후 호출: 실패해도(로그 저장 실패) 실제 작업 자체에는 영향을 주지 않습니다.
+        const ACTION_LOG_KEEP_COUNT = 10; // 실행 기록은 최근 10건만 보관합니다.
+        async function logAdminAction({ type, table, description, rowIds = [], before = [], after = null, detail = null }) {
+            try {
+                const { error } = await sb.from('admin_action_logs').insert({
+                    admin_email: ADMIN_EMAIL,
+                    action_type: type,
+                    table_name: table,
+                    description,
+                    row_ids: rowIds,
+                    before_data: before,
+                    after_data: after,
+                    detail
+                });
+                if (error) throw error;
+                await pruneActionLogs();
+            } catch (e) {
+                console.error('실행 기록 저장 실패 (작업 자체는 정상 처리됨):', e);
+            }
+        }
+
+        // 가장 최근 ACTION_LOG_KEEP_COUNT건만 남기고 그보다 오래된 기록은 지웁니다.
+        async function pruneActionLogs() {
+            try {
+                const { data, error } = await sb.from('admin_action_logs')
+                    .select('id').order('created_at', { ascending: false })
+                    .range(ACTION_LOG_KEEP_COUNT, 9999);
+                if (error) throw error;
+                const idsToDelete = (data || []).map(r => r.id);
+                if (idsToDelete.length > 0) {
+                    await sb.from('admin_action_logs').delete().in('id', idsToDelete);
+                }
+            } catch (e) {
+                console.error('오래된 실행 기록 정리 실패:', e);
+            }
+        }
+
+        // 예약 수정처럼 "무엇이 바뀌었는지"가 중요한 작업에서, 이전 값과 이후 값을 비교해 간단한 한글 요약을 만듭니다.
+        const RESERVATION_FIELD_LABELS = {
+            name: '이름', phone: '연락처', zipCode: '우편번호', address: '주소',
+            startDate: '대여일', endDate: '반납일', delivery: '수령방법', returnWay: '반납방법',
+            status: '상태', trackingNumber: '송장번호', model: '모델', memo: '메모',
+            totalPrice: '금액', review: '리뷰이벤트', scheduleName: '공연/스케줄', account: '환불계좌'
+        };
+        function diffSummary(before, after, labels = RESERVATION_FIELD_LABELS) {
+            if (!before || !after) return '';
+            const changes = [];
+            for (const key in labels) {
+                const b = before[key]; const a = after[key];
+                const bs = (b === undefined || b === null) ? '' : String(b);
+                const as = (a === undefined || a === null) ? '' : String(a);
+                if (bs === as) continue;
+                if (!as) changes.push(`${labels[key]} 삭제`);
+                else if (!bs) changes.push(`${labels[key]}: ${as}`);
+                else changes.push(`${labels[key]}: ${bs} → ${as}`);
+            }
+            return changes.join(', ');
+        }
+
+        function openActionLog() {
+            document.getElementById('actionlog-overlay').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            loadActionLogs();
+        }
+        function closeActionLog() {
+            document.getElementById('actionlog-overlay').classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+        async function loadActionLogs() {
+            const list = document.getElementById('actionlog-list');
+            if (list) list.innerHTML = `<div class="text-center text-slate-400 text-sm font-bold py-10">불러오는 중...</div>`;
+            try {
+                const { data, error } = await sb.from('admin_action_logs').select('*').order('created_at', { ascending: false }).limit(ACTION_LOG_KEEP_COUNT);
+                if (error) throw error;
+                actionLogs = data || [];
+                renderActionLogList();
+            } catch (e) {
+                if (list) list.innerHTML = `<div class="text-center text-rose-500 text-sm font-bold py-10 px-4 leading-relaxed">실행 기록을 불러오지 못했어요.<br>(admin_action_logs 테이블이 있는지 확인해주세요)<br><span class="text-slate-400 font-medium">${e.message || ''}</span></div>`;
+            }
+        }
+        function renderActionLogList() {
+            const list = document.getElementById('actionlog-list');
+            const label = document.getElementById('actionlog-count-label');
+            if (label) label.innerText = actionLogs.length > 0 ? `최근 ${actionLogs.length}건의 작업 기록` : '아직 기록된 작업이 없어요';
+            if (!list) return;
+            if (actionLogs.length === 0) {
+                list.innerHTML = `<div class="text-center text-slate-400 text-sm font-bold py-16">📜 실행 기록이 없어요</div>`;
+                return;
+            }
+            list.innerHTML = actionLogs.map(log => {
+                const dt = new Date(log.created_at);
+                const dtStr = isNaN(dt.getTime()) ? '' : `${dt.getFullYear()}.${String(dt.getMonth() + 1).padStart(2,'0')}.${String(dt.getDate()).padStart(2,'0')} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+                const canUndo = !log.undone && (log.action_type === 'insert' ? (log.after_data && log.after_data.length) : (log.before_data && log.before_data.length));
+                const undoBtn = log.undone
+                    ? `<span class="text-[11px] font-black text-slate-400 bg-slate-100 px-3 py-2 rounded-lg shrink-0">↩️ 실행취소됨</span>`
+                    : (canUndo
+                        ? `<button onclick="event.stopPropagation(); undoAdminLog(${log.id})" class="shrink-0 text-[12.5px] font-bold bg-amber-50 text-amber-600 border border-amber-200 px-3 py-2 rounded-lg hover:bg-amber-100">↩️ 실행취소</button>`
+                        : `<span class="text-[11px] font-bold text-slate-300 px-3 py-2 shrink-0">실행취소 불가</span>`);
+                const lineTwo = log.detail ? `${dtStr} · ${escapeHtml(log.detail)}` : dtStr;
+                const itemCount = (log.row_ids || []).length;
+                const isMultiple = itemCount > 1;
+                const titleHtml = isMultiple
+                    ? `${escapeHtml(log.description || '')} <span class="text-indigo-500">▸ 목록보기</span>`
+                    : escapeHtml(log.description || '');
+                return `
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-2 flex items-center justify-between gap-3 ${isMultiple ? 'cursor-pointer hover:bg-indigo-50' : ''}" ${isMultiple ? `onclick="showActionLogDetail(${log.id})"` : ''}>
+                        <div class="min-w-0">
+                            <div class="text-[14px] font-black text-slate-900 truncate">${titleHtml}</div>
+                            <div class="text-[11px] text-slate-400 font-bold mt-0.5 truncate">${lineTwo}</div>
+                        </div>
+                        ${undoBtn}
+                    </div>`;
+            }).join('');
+        }
+
+        // 여러 건을 한 번에 처리한 실행 기록을 클릭하면, 그 안에 포함된 개별 항목 목록을 보여줍니다.
+        function showActionLogDetail(logId) {
+            const log = actionLogs.find(l => Number(l.id) === Number(logId));
+            if (!log) return;
+            const rows = (log.action_type === 'insert' ? log.after_data : log.before_data) || [];
+            if (rows.length === 0) { showToast('상세 내역이 없어요'); return; }
+            const itemsHtml = rows.map((row, i) => {
+                const borderCls = i === rows.length - 1 ? '' : 'border-b border-slate-100';
+                if (log.table_name === 'admin_settings') {
+                    const key = escapeHtml(row.key || '');
+                    const valStr = typeof row.value === 'object' ? JSON.stringify(row.value) : String(row.value ?? '');
+                    return `<div class="flex items-center justify-between gap-3 px-3 py-2.5 ${borderCls}">
+                        <span class="text-[13px] font-bold text-slate-800 shrink-0">${key}</span>
+                        <span class="text-[12px] font-bold text-slate-400 truncate">${escapeHtml(valStr)}</span>
+                    </div>`;
+                }
+                const name = escapeHtml(row.name || (row.id != null ? `#${row.id}` : '이름없음'));
+                const phone = escapeHtml(row.phone || '-');
+                const extra = escapeHtml(row.model || row.memo || '');
+                return `<div class="flex items-center justify-between gap-3 px-3 py-2.5 ${borderCls}">
+                    <span class="text-[13px] font-bold text-slate-800 truncate">${name}</span>
+                    <span class="text-[12px] font-bold text-slate-400 truncate shrink-0">${phone}${extra ? ' · ' + extra : ''}</span>
+                </div>`;
+            }).join('');
+            setupModal(
+                log.description, `총 ${rows.length}건`, '📋',
+                `<div class="max-h-[320px] overflow-y-auto rounded-xl border border-slate-200 mb-3 bg-white">${itemsHtml}</div>
+                 <button onclick="closeAppModal()" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3.5 rounded-xl text-base transition-colors">닫기</button>`
+            );
+        }
+
+        async function undoAdminLog(logId) {
+            const log = actionLogs.find(l => Number(l.id) === Number(logId));
+            if (!log) { showToast('기록을 찾을 수 없어요'); return; }
+            if (log.undone) { showToast('이미 실행취소된 작업이에요'); return; }
+            showAppConfirm(
+                `이 작업을 실행취소할까요?\n"${log.description}"\n\n※ 이후에 다른 변경이 있었다면 그 내용을 덮어쓸 수 있어요.`,
+                async () => {
+                    try {
+                        if (log.table_name === 'admin_settings') {
+                            await undoSettingsLog(log);
+                        } else {
+                            await undoRowsLog(log);
+                        }
+                        const { error } = await sb.from('admin_action_logs').update({ undone: true, undone_at: new Date().toISOString() }).eq('id', log.id);
+                        if (error) throw error;
+                        log.undone = true;
+                        renderActionLogList();
+                        await fetchData();
+                        if (log.table_name === 'blacklist') await loadBlacklist();
+                        showToast('실행취소했어요');
+                    } catch (e) {
+                        showAppAlert('실행취소 실패: ' + (e.message || ''), '🚨 오류', '⚠️');
+                    }
+                },
+                '실행취소', '실행취소하기', 'bg-amber-500', '↩️'
+            );
+        }
+
+        // reservations/blacklist 공통 실행취소.
+        // - insert 되돌리기: 새로 생긴 행을 id로 삭제
+        // - delete 되돌리기: 행이 이미 사라진 상태라 다시 넣어야 하는데, id 컬럼이 GENERATED ALWAYS라 예전 id값을 그대로 넣으면
+        //   "cannot insert a non-DEFAULT value into column id" 오류가 남 → id를 빼고 새로 INSERT(새 id로 복원)
+        // - update 되돌리기: 행이 그대로 있으므로 이전 값으로 UPDATE (id는 WHERE 조건으로만 사용, upsert 사용 안 함)
+        async function undoRowsLog(log) {
+            const table = log.table_name;
+            if (log.action_type === 'insert') {
+                const ids = (log.after_data || []).map(r => r.id).filter(id => id !== undefined && id !== null);
+                if (ids.length === 0) return;
+                const { error } = await sb.from(table).delete().in('id', ids);
+                if (error) throw error;
+                return;
+            }
+            const before = log.before_data || [];
+            if (before.length === 0) return;
+            if (log.action_type === 'delete') {
+                const rowsToInsert = before.map(({ id, ...rest }) => rest);
+                const { error } = await sb.from(table).insert(rowsToInsert);
+                if (error) throw error;
+                return;
+            }
+            const results = await Promise.all(before.map(row => {
+                const { id, ...patch } = row;
+                if (id === undefined || id === null) return Promise.resolve({ error: null });
+                return sb.from(table).update(patch).eq('id', id);
+            }));
+            const failed = results.find(r => r.error);
+            if (failed) throw new Error(failed.error.message);
+        }
+
+        // admin_settings는 key를 기본키로 쓰는 key-value 테이블이라 별도 처리
+        async function undoSettingsLog(log) {
+            const before = log.before_data || []; // [{ key, value }]
+            const toUpsert = before.filter(b => b.value !== null && b.value !== undefined)
+                .map(b => ({ key: b.key, value: b.value, updated_at: new Date().toISOString() }));
+            const toDelete = before.filter(b => b.value === null || b.value === undefined).map(b => b.key);
+            if (toUpsert.length) {
+                const { error } = await sb.from('admin_settings').upsert(toUpsert, { onConflict: 'key' });
+                if (error) throw error;
+            }
+            if (toDelete.length) {
+                const { error } = await sb.from('admin_settings').delete().in('key', toDelete);
+                if (error) throw error;
+            }
+            settingsLoaded = false;
+            await loadAdminSettings();
+        }
 
         // ===== 좌측 필터 드로어 열기/닫기 =====
         function openFilterDrawer() {
@@ -2380,7 +2650,7 @@
                 })) return true;
 
                 // 나머지 오버레이/모달: 'hidden' 클래스가 없으면 열려있는 것
-                const hiddenBased = ['settings-overlay', 'trash-overlay', 'sales-overlay', 'review-manager', 'app-modal', 'add-reservation-modal', 'bulk-tracking-modal', 'bulk-tracking-review-modal', 'today-post-modal', 'review-edit-modal', 'hdr-quick-menu'];
+                const hiddenBased = ['settings-overlay', 'trash-overlay', 'sales-overlay', 'review-manager', 'app-modal', 'add-reservation-modal', 'bulk-tracking-modal', 'bulk-tracking-review-modal', 'today-post-modal', 'review-edit-modal', 'hdr-quick-menu', 'actionlog-overlay', 'low-stock-section'];
                 return hiddenBased.some(id => {
                     const el = document.getElementById(id);
                     return el && !el.classList.contains('hidden');
@@ -2981,12 +3251,18 @@
             if (!section || !list) return;
 
             const alerts = getLowStockAlerts();
+            const pill = document.getElementById('low-stock-pill');
+            const pillText = document.getElementById('low-stock-pill-text');
             if (alerts.length === 0) {
-                section.classList.add('hidden');
+                // 품절·부족이 없으면 알약 자체를 숨김
+                if (pill) pill.classList.add('hidden');
+                closeLowStockPopover();
                 list.innerHTML = '';
                 return;
             }
-            section.classList.remove('hidden');
+            if (pill) pill.classList.remove('hidden');
+            const soldOut = alerts.filter(a => a.remaining <= 0).length;
+            if (pillText) pillText.innerText = soldOut > 0 ? `품절 ${soldOut}` : `재고부족 ${alerts.length}`;
 
             list.innerHTML = alerts.map(a => {
                 const dateLabel = a.start.getTime() === a.end.getTime()
@@ -6737,7 +7013,7 @@
         // ===================== 매출 통계 =====================
         // 대여 시작일(startDate) 기준, 취소/반납 상태 제외, 결제금액(totalPrice) 합산
         // 모든 기간 계산은 한국(Asia/Seoul) 날짜 기준으로 고정 (기기 시간대와 무관하게 항상 동일)
-        let salesMode = 'month'; // 'week' | 'month'
+        let salesMode = 'month'; // [2026-11-17] 주간은 쓰지 않음 — 항상 월간
         let salesSelectedKey = null; // 그래프에서 선택(클릭)한 구간 key (null이면 현재 구간)
         let lastSalesBuckets = [];   // 마지막으로 계산된 구간 목록 (상세 시트에서 재사용)
 
@@ -6752,7 +7028,7 @@
             document.body.style.overflow = '';
         }
         function setSalesMode(mode) {
-            salesMode = mode;
+            salesMode = 'month';
             salesSelectedKey = null;
             const w = document.getElementById('sales-tab-week');
             const m = document.getElementById('sales-tab-month');
@@ -6772,9 +7048,43 @@
             return new Date(y, m - 1, d);
         }
 
-        function salesPriceOf(item) {
+        // [2026-11-17] 매출 통계는 순수익 기준: 결제금액 - 택배비(택배수령 4,000원)
+        const SALES_SHIPPING_FEE = 3000; // [2026-11-17] 4천 → 3천
+        function salesGrossOf(item) {
             return parseInt(String(item.totalPrice || 0).replace(/[^0-9]/g, '')) || 0;
         }
+        function salesShipOf(item) {
+            const gross = salesGrossOf(item);
+            if (!String(item.delivery || '').includes('택배') || gross <= 0) return 0;
+            return Math.min(gross, SALES_SHIPPING_FEE);
+        }
+        function salesPriceOf(item) { // 순수익
+            return salesGrossOf(item) - salesShipOf(item);
+        }
+        function salesSumOf(items) {
+            let gross = 0, ship = 0, shipCount = 0;
+            items.forEach(it => { gross += salesGrossOf(it); const sh = salesShipOf(it); ship += sh; if (sh) shipCount++; });
+            return { gross, ship, net: gross - ship, count: items.length, shipCount };
+        }
+        // [2026-11-17] 매달 빠지는 고정비 (첫 예약이 있는 달부터 매달 공제)
+        const SALES_FIXED_COSTS = [['사무실 월세', 557500], ['관리비', 200000], ['주차비', 40000], ['인터넷', 37400], ['CCTV', 33000], ['AI 구독료', 60000]];
+        const SALES_FIXED_TOTAL = SALES_FIXED_COSTS.reduce((a, c) => a + c[1], 0);
+        // 공제 내역 아코디언: 매출액 − 택배비 − 고정비 = 순수익
+        function salesBreakdownHtml(sum, fixed, label) {
+            const net = sum.gross - sum.ship - fixed;
+            const line = (name, v, sub) => `<div class="flex items-center justify-between gap-2 py-1"><span class="text-[12px] font-bold text-slate-500">${name}${sub ? ` <span class="text-slate-400 font-medium">${sub}</span>` : ''}</span><span class="text-[12.5px] font-black font-tnum ${v < 0 ? 'text-rose-500' : 'text-slate-800'}">${v < 0 ? '−' + Math.abs(v).toLocaleString() : v.toLocaleString()}원</span></div>`;
+            return `<details class="sales-acc mt-2">
+                <summary class="text-[11.5px] font-bold text-slate-400 cursor-pointer select-none">${label || '공제 내역 보기'}</summary>
+                <div class="mt-1.5 bg-slate-50 rounded-xl px-3 py-2">
+                    ${line('매출액', sum.gross, `${sum.count}건`)}
+                    ${line('택배비', sum.ship ? -sum.ship : 0, `${sum.shipCount}건 × ${SALES_SHIPPING_FEE.toLocaleString()}`)}
+                    ${fixed ? SALES_FIXED_COSTS.map(([n, v]) => line(n, -v)).join('') : '<div class="text-[11px] font-bold text-slate-400 py-1">고정비 없음 (첫 예약 이전 달)</div>'}
+                    <div class="border-t border-slate-200 mt-1 pt-1.5 flex items-center justify-between"><span class="text-[12.5px] font-black text-slate-800">순수익</span><span class="text-[14px] font-black font-tnum ${net < 0 ? 'text-rose-500' : 'text-emerald-600'}">${net < 0 ? '−' : ''}${Math.abs(net).toLocaleString()}원</span></div>
+                </div>
+            </details>`;
+        }
+        // 평균 단가: 100원 단위 반올림
+        function avg100(total, count) { return count > 0 ? Math.round(total / count / 100) * 100 : 0; }
         // 매출 산정 대상: 대여시작일 있고, 취소/반납완료가 아닌 건
         function isSalesCounted(item) {
             const st = String(item.status || '');
@@ -6877,10 +7187,14 @@
                 weekdayCount[wd] += 1;
             });
 
+            // [2026-11-17] 고정비 공제: 첫 예약이 있는 달부터 매달
+            const firstMonthK = counted.reduce((mn, it) => { const [yy, mm] = String(it.startDate).split('-').map(Number); return Math.min(mn, yy * 100 + mm); }, Infinity);
+            const fixedOfK = k => (k >= firstMonthK ? SALES_FIXED_TOTAL : 0);
+            buckets.forEach(b => { b.sales = b.total; b.fixed = fixedOfK(b.y * 100 + b.m); b.total = b.sales - b.fixed; });
             const cur = buckets[buckets.length - 1];
             const prev = buckets[buckets.length - 2];
             const avgPrice = cur.count > 0 ? Math.round(cur.total / cur.count) : 0;
-            const diffPct = (prev && prev.total > 0) ? Math.round((cur.total - prev.total) / prev.total * 100) : null;
+            const diffPct = (prev && prev.total > 0) ? Math.round((cur.total - prev.total) / prev.total * 100) : null; // 순수익 기준
             const diffNote = (!prev || prev.total === 0) ? (cur.total > 0 ? '지난 기간 매출 없음 (비교불가)' : '비교 데이터 없음') : null;
 
             // 이번 기간 일평균 매출 (진행 중인 기간이면 지금까지 경과일 기준, 지난 기간이면 전체 일수 기준)
@@ -6908,7 +7222,26 @@
             const countAll = counted.length;
             const avgAll = countAll > 0 ? Math.round(totalAll / countAll) : 0;
 
-            const barMax = Math.max(1, ...buckets.map(g => g.total));
+            const barMax = Math.max(1, ...buckets.map(g => Math.abs(g.total)));
+            const curSum = salesSumOf(cur.items);
+            const monthMap = {};
+            counted.forEach(it => {
+                const [yy, mm] = String(it.startDate).split('-').map(Number);
+                const k = yy * 100 + mm;
+                (monthMap[k] = monthMap[k] || []).push(it);
+            });
+            const curK = today.getFullYear() * 100 + today.getMonth() + 1;
+            const monthKeys = [];
+            if (firstMonthK !== Infinity) {
+                const lastK = Math.max(curK, ...Object.keys(monthMap).map(Number));
+                for (let k = firstMonthK; k <= lastK; k = (k % 100 === 12) ? (Math.floor(k / 100) + 1) * 100 + 1 : k + 1) monthKeys.push(k);
+            }
+            const monthRows = monthKeys.reverse().map(k => {
+                const sm = salesSumOf(monthMap[k] || []);
+                const fixed = fixedOfK(k);
+                return { ...sm, fixed, profit: sm.net - fixed, label: `${Math.floor(k / 100)}.${String(k % 100).padStart(2, '0')}`, isCur: k === curK };
+            });
+            const profitAll = monthRows.reduce((a, r) => a + r.profit, 0);
             const periodLabel = salesMode === 'month' ? '이번 달' : '이번 주';
 
             const payColors = { 카드: '#10b981', 이체: '#3b82f6', 기타: '#f59e0b', 미확인: '#94a3b8' };
@@ -6918,36 +7251,53 @@
 
             body.innerHTML = `
                 <div class="grid grid-cols-2 gap-2.5 mb-4">
-                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3.5">
-                        <div class="text-[11px] font-bold text-slate-400 mb-1">${periodLabel} 매출 (${cur.label})</div>
-                        <div class="text-[19px] font-black text-emerald-600 font-tnum leading-tight">${fmtWon(cur.total)}</div>
-                        ${diffPct !== null ? `<div class="text-[11px] font-bold mt-0.5 ${diffPct >= 0 ? 'text-emerald-500' : 'text-rose-500'}">${diffPct >= 0 ? '▲' : '▼'} 지난 ${salesMode === 'month' ? '달' : '주'} 대비 ${Math.abs(diffPct)}%</div>` : `<div class="text-[11px] font-bold text-slate-300 mt-0.5">${diffNote}</div>`}
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3.5" style="grid-column:1 / -1">
+                        <div class="text-[11px] font-bold text-slate-400 mb-1">${periodLabel} 순수익 (${cur.label})</div>
+                        <div class="text-[22px] font-black ${cur.total < 0 ? 'text-rose-500' : 'text-emerald-600'} font-tnum leading-tight">${cur.total < 0 ? '−' : ''}${fmtWon(Math.abs(cur.total))}</div>
+                        ${salesBreakdownHtml(curSum, cur.fixed)}
+                        ${diffPct !== null ? `<div class="text-[11px] font-bold mt-0.5 ${diffPct >= 0 ? 'text-emerald-500' : 'text-rose-500'}">${diffPct >= 0 ? '▲' : '▼'} 지난 ${salesMode === 'month' ? '달' : '주'} 대비 ${Math.abs(diffPct)}%</div>` : `<div class="text-[11px] font-bold text-slate-300 mt-0.5">${diffNote || '지난 달이 마이너스라 비교하지 않아요'}</div>`}
                     </div>
                     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3.5">
                         <div class="text-[11px] font-bold text-slate-400 mb-1">${periodLabel} 예약</div>
                         <div class="text-[19px] font-black text-slate-800 font-tnum leading-tight">${cur.count}건</div>
-                        <div class="text-[11px] font-bold text-slate-400 mt-0.5">평균 단가 ${fmtWon(avgPrice)} · 일평균 ${fmtWonShort(avgPerDay)}</div>
+                        <div class="text-[11px] font-bold text-slate-400 mt-0.5">평균 단가 ${fmtWon(avg100(cur.sales, cur.count))}</div>
                     </div>
                 </div>
 
-                <div class="text-[12px] font-bold text-slate-400 px-1 mb-1.5">${salesMode === 'month' ? '월간' : '주간'} 매출 추이 (최근 ${buckets.length}구간 · 한국 날짜 기준) · 막대를 탭하면 내역을 볼 수 있어요</div>
+                <div class="text-[12px] font-bold text-slate-400 px-1 mb-1.5">${salesMode === 'month' ? '월간' : '주간'} 순수익 추이 (최근 ${buckets.length}개월) · 막대를 탭하면 내역을 볼 수 있어요</div>
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3.5 mb-4">
                     <div class="flex items-end justify-between gap-1.5" style="height: 150px;">
                         ${buckets.map(g => {
-                            const h = Math.max(4, Math.round(g.total / barMax * 120));
+                            const h = Math.max(4, Math.round(Math.max(0, g.total) / barMax * 120));
                             const isSelected = g.key === selectedBucket.key;
+                            const neg = g.total < 0;
                             const isCur = g === cur;
                             return `
                                 <button type="button" onclick="selectSalesBucket('${g.key}')" class="flex-1 flex flex-col items-center justify-end gap-1 min-w-0">
-                                    <div class="text-[9px] font-black ${isSelected ? 'text-emerald-600' : 'text-slate-400'} font-tnum whitespace-nowrap">${fmtWonShort(g.total)}</div>
-                                    <div class="w-full rounded-t-md ${isSelected ? 'bg-emerald-500' : 'bg-emerald-200'} ${isCur && !isSelected ? 'ring-2 ring-emerald-300' : ''}" style="height:${h}px"></div>
+                                    <div class="text-[9px] font-black ${neg ? 'text-rose-500' : (isSelected ? 'text-emerald-600' : 'text-slate-400')} font-tnum whitespace-nowrap">${fmtWonShort(g.total)}</div>
+                                    <div class="w-full rounded-t-md ${neg ? (isSelected ? 'bg-rose-400' : 'bg-rose-200') : (isSelected ? 'bg-emerald-500' : 'bg-emerald-200')} ${isCur && !isSelected ? 'ring-2 ring-emerald-300' : ''}" style="height:${h}px"></div>
                                     <div class="text-[9px] font-bold ${isSelected ? 'text-emerald-600' : 'text-slate-400'} font-tnum whitespace-nowrap truncate w-full text-center">${g.label}</div>
                                 </button>`;
                         }).join('')}
                     </div>
                 </div>
 
-                <div class="text-[12px] font-bold text-slate-400 px-1 mb-1.5">💳 결제 수단별 매출 (전체 기간)</div>
+                <div class="text-[12px] font-bold text-slate-400 px-1 mb-1.5">🧾 월별 순수익 (최신순 · 펼치면 공제 내역)</div>
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm mb-4 overflow-hidden">
+                    ${monthRows.length === 0 ? `<div class="text-center text-slate-300 text-[13px] font-bold py-6">데이터가 없어요</div>` : monthRows.map((r, i) => `
+                    <div class="px-3.5 py-3 ${i ? 'border-t border-slate-100' : ''}">
+                        <div class="flex items-baseline justify-between gap-2">
+                            <span class="text-[14px] font-black ${r.isCur ? 'text-emerald-600' : 'text-slate-800'}">${r.label}${r.isCur ? ' <span class="text-[11px] font-bold">이번 달</span>' : ''}</span>
+                            <span class="text-[16px] font-black ${r.profit < 0 ? 'text-rose-500' : 'text-slate-900'} font-tnum">${r.profit < 0 ? '−' : ''}${fmtWon(Math.abs(r.profit))}</span>
+                        </div>
+                        <div class="flex items-center justify-between gap-2 mt-1 text-[11.5px] font-bold text-slate-400 font-tnum">
+                            <span>${r.count}건 · 평균 단가 <span class="text-indigo-600 font-black">${fmtWon(avg100(r.net, r.count))}</span></span>
+                        </div>
+                        ${salesBreakdownHtml(r, r.fixed)}
+                    </div>`).join('')}
+                </div>
+
+                <div class="text-[12px] font-bold text-slate-400 px-1 mb-1.5">💳 결제 수단별 매출 (전체 기간 · 택배비 제외, 고정비 미포함)</div>
                 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3.5 mb-4">
                     ${countAll === 0 ? `<div class="text-center text-slate-300 text-[13px] font-bold py-6">데이터가 없어요</div>` : Object.entries(payGroups).filter(([,g]) => g.count > 0).sort((a,b) => b[1].total - a[1].total).map(([label, g]) => {
                         const pct = totalAll > 0 ? Math.round(g.total / totalAll * 100) : 0;
@@ -7000,8 +7350,8 @@
                 <div class="text-[12px] font-bold text-slate-400 px-1 mb-1.5">📈 전체 요약 (취소 제외 · 예약 있는 전체 기간)</div>
                 <div class="grid grid-cols-3 gap-2.5">
                     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center">
-                        <div class="text-[10px] font-bold text-slate-400 mb-1">누적 매출</div>
-                        <div class="text-[14px] font-black text-emerald-600 font-tnum leading-tight">${fmtWonShort(totalAll)}</div>
+                        <div class="text-[10px] font-bold text-slate-400 mb-1">누적 순수익</div>
+                        <div class="text-[14px] font-black ${profitAll < 0 ? 'text-rose-500' : 'text-emerald-600'} font-tnum leading-tight">${fmtWonShort(profitAll)}</div>
                     </div>
                     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center">
                         <div class="text-[10px] font-bold text-slate-400 mb-1">총 예약</div>
@@ -7009,7 +7359,7 @@
                     </div>
                     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center">
                         <div class="text-[10px] font-bold text-slate-400 mb-1">평균 단가</div>
-                        <div class="text-[14px] font-black text-slate-800 font-tnum leading-tight">${fmtWonShort(avgAll)}</div>
+                        <div class="text-[14px] font-black text-slate-800 font-tnum leading-tight">${fmtWon(avg100(totalAll, countAll))}</div>
                     </div>
                 </div>
             `;
@@ -7036,7 +7386,8 @@
             if (!bucket) { body.innerHTML = `<div class="text-center text-slate-300 text-[13px] font-bold py-10">데이터를 찾을 수 없어요</div>`; return; }
 
             if (titleEl) titleEl.innerText = `${bucket.label} 매출 내역`;
-            const avg = bucket.count > 0 ? Math.round(bucket.total / bucket.count) : 0;
+            const avg = avg100(bucket.sales ?? bucket.total, bucket.count);
+            const bSum = salesSumOf(bucket.items);
             const stats = computeStatsForItems(bucket.items);
             const payColors = { 카드: '#10b981', 이체: '#3b82f6', 기타: '#f59e0b', 미확인: '#94a3b8' };
             const payMax = Math.max(1, ...Object.values(stats.payGroups).map(g => g.total));
@@ -7045,8 +7396,8 @@
             const summaryHtml = `
                 <div class="grid grid-cols-3 gap-2 mb-4">
                     <div class="bg-emerald-50 rounded-xl p-2.5 text-center">
-                        <div class="text-[10px] font-bold text-emerald-600 mb-0.5">결제금액</div>
-                        <div class="text-[13px] font-black text-emerald-700 font-tnum">${fmtWonShort(bucket.total)}</div>
+                        <div class="text-[10px] font-bold text-emerald-600 mb-0.5">순수익</div>
+                        <div class="text-[13px] font-black ${bucket.total < 0 ? 'text-rose-500' : 'text-emerald-700'} font-tnum">${bucket.total < 0 ? '−' : ''}${fmtWon(Math.abs(bucket.total))}</div>
                     </div>
                     <div class="bg-slate-50 rounded-xl p-2.5 text-center">
                         <div class="text-[10px] font-bold text-slate-400 mb-0.5">예약</div>
@@ -7054,9 +7405,10 @@
                     </div>
                     <div class="bg-slate-50 rounded-xl p-2.5 text-center">
                         <div class="text-[10px] font-bold text-slate-400 mb-0.5">평균 단가</div>
-                        <div class="text-[13px] font-black text-slate-700 font-tnum">${fmtWonShort(avg)}</div>
+                        <div class="text-[13px] font-black text-slate-700 font-tnum">${fmtWon(avg)}</div>
                     </div>
-                </div>`;
+                </div>
+                <div class="mb-4 -mt-2">${salesBreakdownHtml(bSum, bucket.fixed || 0)}</div>`;
 
             if (bucket.count === 0) {
                 body.innerHTML = summaryHtml + `<div class="text-center text-slate-300 text-[13px] font-bold py-10">이 구간엔 예약이 없어요</div>`;
@@ -8358,6 +8710,27 @@
     </div>
 
     <!-- ===================== 휴지통 오버레이 ===================== -->
+    <!-- ===================== 실행 기록 오버레이 (PC에서 가져옴, 모바일 크기) ===================== -->
+    <div id="actionlog-overlay" class="hidden fixed inset-0 z-[120] bg-slate-50">
+        <div class="h-full flex flex-col">
+            <div class="bg-white border-b border-slate-200 shadow-sm shrink-0" style="padding-top: env(safe-area-inset-top,0px);">
+                <div class="flex items-center gap-2 px-3 py-3">
+                    <button onclick="closeActionLog()" class="w-9 h-9 flex items-center justify-center rounded-xl bg-slate-100 text-slate-600 shrink-0" aria-label="닫기">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    </button>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-[16px] font-black text-slate-900 leading-tight">📜 실행 기록</div>
+                        <div id="actionlog-count-label" class="text-[11px] font-bold text-slate-400 leading-tight">관리자가 수행한 작업 내역이에요. 잘못 실행했다면 실행취소할 수 있어요</div>
+                    </div>
+                    <button onclick="loadActionLogs()" class="w-9 h-9 flex items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 shrink-0" aria-label="새로고침">
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div id="actionlog-list" class="flex-1 overflow-y-auto p-3" style="padding-bottom: calc(16px + env(safe-area-inset-bottom,0px));"></div>
+        </div>
+    </div>
+
     <div id="trash-overlay" class="hidden fixed inset-0 z-[120] bg-slate-50">
         <div class="h-full flex flex-col">
             <div class="bg-white border-b border-slate-200 shadow-sm shrink-0" style="padding-top: env(safe-area-inset-top,0px);">
@@ -8464,12 +8837,9 @@
                     </button>
                     <div class="flex-1 min-w-0">
                         <div class="text-[16px] font-black text-slate-900 leading-tight">📊 매출 통계</div>
-                        <div class="text-[11px] font-bold text-slate-400 leading-tight">대여 시작일 기준 · 취소 제외</div>
+                        <div class="text-[11px] font-bold text-slate-400 leading-tight">대여 시작일 기준 · 취소 제외 · 택배비·고정비 공제 순수익</div>
                     </div>
-                    <div class="flex bg-slate-100 rounded-xl p-0.5 shrink-0">
-                        <button id="sales-tab-week" onclick="setSalesMode('week')" class="px-3 py-1.5 rounded-lg text-[12px] font-black text-slate-500">주간</button>
-                        <button id="sales-tab-month" onclick="setSalesMode('month')" class="px-3 py-1.5 rounded-lg text-[12px] font-black bg-white text-emerald-600 shadow-sm">월간</button>
-                    </div>
+
                 </div>
             </div>
             <div id="sales-body" class="flex-1 overflow-y-auto" style="padding: 14px 12px calc(28px + env(safe-area-inset-bottom,0px));"></div>
@@ -9309,6 +9679,294 @@
                 if (el) { el.style.borderColor = '#06B6D4'; el.querySelector('details').open = true; el.scrollIntoView({ block: 'center' }); }
             }
         }
+    </script>
+    <!-- [2026-11-17] 매출 통계 모바일 개편: 예약일 기준(택배수령은 송장등록일), 순수익(택배비·고정비 공제) -->
+    <style id="sl-style">
+        #sales-overlay { background:#F2F4F7 !important; }
+        #sales-overlay .sl-sub { font-size:11.5px; font-weight:700; color:#94A3B8; }
+        #sales-body { padding:12px 14px calc(32px + env(safe-area-inset-bottom,0px)) !important; -webkit-overflow-scrolling:touch; }
+        .sl-card { background:#fff; border-radius:20px; padding:18px; margin-bottom:12px; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+        .sl-h { font-size:15px; font-weight:900; color:#0F172A; margin:0 0 12px; display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+        .sl-h small { font-size:11.5px; font-weight:700; color:#94A3B8; }
+        /* 월 선택 */
+        .sl-mnav { display:flex; align-items:center; justify-content:space-between; margin:-4px -6px 6px; }
+        .sl-mnav button { width:40px; height:40px; border:0; background:none; border-radius:12px; color:#334155; display:grid; place-items:center; -webkit-tap-highlight-color:transparent; }
+        .sl-mnav button:disabled { color:#CBD5E1; }
+        .sl-mnav button:active:not(:disabled) { background:#F1F5F9; }
+        .sl-mnav b { font-size:16px; font-weight:900; color:#0F172A; }
+        .sl-mnav b span { font-size:11px; font-weight:800; color:#059669; background:#ECFDF5; border-radius:999px; padding:2px 7px; margin-left:6px; vertical-align:2px; }
+        .sl-big { text-align:center; padding:6px 0 4px; }
+        .sl-big s { display:block; text-decoration:none; font-size:12.5px; font-weight:800; color:#64748B; }
+        .sl-big strong { display:block; font-size:32px; font-weight:900; letter-spacing:-1px; font-variant-numeric:tabular-nums; line-height:1.2; margin-top:4px; }
+        .sl-pos { color:#059669; } .sl-gross { color:#0F172A; } .sl-neg { color:#E11D48; }
+        .sl-diff { display:inline-block; margin-top:6px; font-size:12px; font-weight:800; border-radius:999px; padding:3px 10px; background:#F1F5F9; color:#64748B; }
+        .sl-diff.up { background:#ECFDF5; color:#059669; } .sl-diff.dn { background:#FFF1F2; color:#E11D48; }
+        .sl-kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:16px; }
+        .sl-kpis div { background:#F8FAFC; border-radius:14px; padding:10px 6px; text-align:center; min-width:0; }
+        .sl-kpis s { display:block; text-decoration:none; font-size:11px; font-weight:700; color:#94A3B8; }
+        .sl-kpis b { display:block; font-size:14.5px; font-weight:900; color:#0F172A; margin-top:3px; font-variant-numeric:tabular-nums; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .sl-kpis em.sl-kx { display:block; font-style:normal; font-size:10.5px; font-weight:700; color:#94A3B8; margin-top:1px; }
+        .sl-rts { margin-top:16px; display:flex; flex-direction:column; gap:14px; }
+        .sl-rt-h { font-size:12.5px; font-weight:800; color:#475569; margin-bottom:6px; }
+        .sl-rt-bar { display:flex; height:10px; border-radius:99px; overflow:hidden; background:#F1F5F9; gap:2px; }
+        .sl-rt-bar span { display:block; height:100%; min-width:3px; }
+        .sl-rt-lg { display:flex; flex-wrap:wrap; gap:6px 12px; margin-top:8px; }
+        .sl-rt-lg span { display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:700; color:#475569; white-space:nowrap; }
+        .sl-rt-lg i { width:8px; height:8px; border-radius:50%; flex:none; }
+        .sl-rt-lg b { font-weight:900; color:#0F172A; font-variant-numeric:tabular-nums; }
+        .sl-rt-lg em { font-style:normal; color:#94A3B8; font-size:11.5px; font-weight:700; }
+        .sl-note { margin-top:10px; font-size:11.5px; font-weight:700; color:#B45309; background:#FFFBEB; border-radius:10px; padding:8px 10px; }
+        /* 공제 내역 아코디언 */
+        .sl-acc { margin-top:12px; border-top:1px solid #F1F5F9; }
+        .sl-acc summary { list-style:none; display:flex; align-items:center; justify-content:space-between; padding:12px 2px 2px; font-size:13px; font-weight:800; color:#475569; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+        .sl-acc summary::-webkit-details-marker { display:none; }
+        .sl-acc summary i { font-style:normal; transition:transform .2s; color:#94A3B8; }
+        .sl-acc[open] summary i { transform:rotate(180deg); }
+        .sl-rows { margin-top:8px; background:#F8FAFC; border-radius:14px; padding:6px 14px; }
+        .sl-row { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 0; font-size:13px; }
+        .sl-row + .sl-row { border-top:1px dashed #E2E8F0; }
+        .sl-row span { font-weight:700; color:#475569; } .sl-row span em { font-style:normal; color:#94A3B8; font-weight:600; font-size:11.5px; margin-left:4px; }
+        .sl-row b { font-weight:800; color:#0F172A; font-variant-numeric:tabular-nums; white-space:nowrap; }
+        .sl-row b.m { color:#E11D48; }
+        .sl-ops { margin:-2px 0 4px; }
+        .sl-ops summary { list-style:none; display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:800; color:#64748B; padding:4px 0 6px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+        .sl-ops summary::-webkit-details-marker { display:none; }
+        .sl-ops summary i { font-style:normal; color:#94A3B8; transition:transform .2s; }
+        .sl-ops[open] summary i { transform:rotate(180deg); }
+        .sl-ops-in { background:#fff; border-radius:10px; padding:4px 12px; margin-bottom:6px; }
+        .sl-ops-in div { display:flex; justify-content:space-between; gap:8px; padding:6px 0; font-size:12.5px; }
+        .sl-ops-in div + div { border-top:1px solid #F1F5F9; }
+        .sl-ops-in span { font-weight:700; color:#64748B; } .sl-ops-in b { font-weight:800; color:#E11D48; font-variant-numeric:tabular-nums; }
+        .sl-row.tot { border-top:1.5px solid #0F172A !important; margin-top:2px; } .sl-row.tot span { color:#0F172A; font-weight:900; } .sl-row.tot b { font-size:15px; }
+        /* 추이 그래프 */
+        .sl-chart { display:flex; align-items:stretch; gap:6px; height:170px; }
+        .sl-bar { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; border:0; background:none; padding:0; -webkit-tap-highlight-color:transparent; }
+        .sl-bar .v { font-size:10.5px; font-weight:800; color:#94A3B8; white-space:nowrap; height:16px; font-variant-numeric:tabular-nums; }
+        .sl-bar .area { flex:1; width:100%; position:relative; }
+        .sl-bar .zero { position:absolute; left:0; right:0; border-top:1px solid #E2E8F0; }
+        .sl-bar .fill { position:absolute; left:18%; right:18%; border-radius:6px; background:#A7F3D0; }
+        .sl-bar .fill.neg { background:#FECDD3; }
+        .sl-bar .lb { font-size:12px; font-weight:800; color:#94A3B8; margin-top:6px; }
+        .sl-bar.on .fill { background:#10B981; } .sl-bar.on .fill.neg { background:#F43F5E; }
+        .sl-bar.on .v, .sl-bar.on .lb { color:#0F172A; }
+        /* 월별 목록 */
+        .sl-month { border-top:1px solid #F1F5F9; }
+        .sl-month:first-child { border-top:0; }
+        .sl-month summary { list-style:none; display:flex; align-items:center; gap:10px; padding:14px 0; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+        .sl-month summary::-webkit-details-marker { display:none; }
+        .sl-month .t { flex:1; min-width:0; }
+        .sl-month .t b { display:block; font-size:15px; font-weight:900; color:#0F172A; }
+        .sl-month .t s { display:block; text-decoration:none; font-size:12px; font-weight:700; color:#94A3B8; margin-top:2px; }
+        .sl-month .p { font-size:16px; font-weight:900; font-variant-numeric:tabular-nums; white-space:nowrap; }
+        .sl-month summary i { font-style:normal; color:#CBD5E1; transition:transform .2s; }
+        .sl-month[open] summary i { transform:rotate(180deg); }
+        .sl-month .sl-rows { margin:0 0 14px; }
+        /* 막대 목록 (결제수단 · 모델) */
+        .sl-li { padding:8px 0; }
+        .sl-li .top { display:flex; justify-content:space-between; gap:8px; font-size:13px; font-weight:800; color:#334155; }
+        .sl-li .top em { font-style:normal; color:#94A3B8; font-weight:700; }
+        .sl-li .track { height:8px; border-radius:99px; background:#F1F5F9; margin-top:6px; overflow:hidden; }
+        .sl-li .track div { height:100%; border-radius:99px; }
+        .sl-wk { display:flex; gap:6px; align-items:flex-end; height:96px; }
+        .sl-wk div { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; font-size:11px; font-weight:800; color:#64748B; }
+        .sl-wk span { width:70%; border-radius:6px 6px 2px 2px; background:#C7D2FE; }
+        .sl-wk .we span { background:#FECDD3; } .sl-wk .we { color:#E11D48; }
+        .sl-empty { text-align:center; color:#CBD5E1; font-size:13px; font-weight:800; padding:20px 0; }
+    </style>
+    <script id="sl-script">
+    (function () {
+        const pad = n => String(n).padStart(2, '0');
+        const won = n => (n < 0 ? '−' : '') + Math.abs(Math.round(n)).toLocaleString() + '원';
+        const short = n => { const a = Math.abs(n), sg = n < 0 ? '−' : ''; if (a >= 100000000) return sg + (a / 1e8).toFixed(1).replace(/\.0$/, '') + '억'; if (a >= 10000) return sg + Math.round(a / 10000).toLocaleString() + '만'; return sg + a.toLocaleString(); };
+        const kstDay = iso => { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso)); } catch (e) { return null; } };
+        const fromOrderTime = s => { const m = String(s || '').match(/^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})/); return m ? `${m[1]}-${pad(m[2])}-${pad(m[3])}` : null; };
+        const isPost = it => String(it.delivery || '').includes('택배');
+
+        // 매출 기준일: 예약일(접수일시). 택배수령은 송장 등록일(postRegisteredAt),
+        // 송장 등록일이 없으면 대여 시작일 3일 전 (11-17), 시작일도 없으면 예약일
+        const minus3 = d => { const m = String(d || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (!m) return null; const x = new Date(+m[1], +m[2] - 1, +m[3] - 3); return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}`; };
+        window.salesDateOf = function (it) {
+            if (isPost(it)) {
+                if (it.postRegisteredAt) return kstDay(it.postRegisteredAt);
+                return minus3(it.startDate) || fromOrderTime(it.orderTime);
+            }
+            return fromOrderTime(it.orderTime);
+        };
+        const notCanceled = it => !String(it.status || '').includes('취소');
+        window.isSalesCounted = isSalesCounted = function (it) { return notCanceled(it) && !!salesDateOf(it); };
+
+        let selK = null;
+        const kOf = d => +d.slice(0, 4) * 100 + +d.slice(5, 7);
+        const nextK = k => (k % 100 === 12 ? (Math.floor(k / 100) + 1) * 100 + 1 : k + 1);
+        const prevK = k => (k % 100 === 1 ? (Math.floor(k / 100) - 1) * 100 + 12 : k - 1);
+        const kLabel = k => `${Math.floor(k / 100)}년 ${k % 100}월`;
+
+        const SALES_VISIT_FEE = 3500; // 방문택배신청 1건당 운영비
+        // 연장신청: 결제수단이 비어 있으면 계좌이체로, 평균 단가 계산에서는 제외 (11-17)
+        const isExt = it => String(it.category || '').includes('연장');
+        const _pg = payGroupOf;
+        window.payGroupOf = payGroupOf = function (it) { if (isExt(it) && !String(it.paymentMethod || '').trim()) return '이체'; return _pg(it); };
+        const isVisit = it => String(it.category || '').includes('방문택배');
+        const avgOf = items => { const xs = items.filter(it => !isExt(it) && !isVisit(it)); /* 연장·방문택배신청은 평균 단가에서 제외 */ return avg100(xs.reduce((a, it) => a + salesPriceOf(it), 0), xs.length); };
+        function rowsHtml(sum, fixed) {
+            const r = (n, v, em, minus) => `<div class="sl-row"><span>${n}${em ? `<em>${em}</em>` : ''}</span><b class="${minus && v ? 'm' : ''}">${minus && v ? '−' : ''}${Math.abs(v).toLocaleString()}원</b></div>`;
+            const net = sum.gross - sum.ship - fixed;
+            return `<div class="sl-rows">
+                ${r('매출액', sum.gross, `${sum.count}건`)}
+                ${r('택배비', sum.ship, `${sum.shipCount}건 × ${SALES_SHIPPING_FEE.toLocaleString()}원`, true)}
+                ${fixed ? (() => {
+                    const visit = sum.visit || 0, base = fixed - visit * SALES_VISIT_FEE;
+                    const ops = (base ? SALES_FIXED_COSTS.map(([n, v]) => [n, v, '']) : []).concat(visit ? [['방문택배', visit * SALES_VISIT_FEE, `${visit}건 × ${SALES_VISIT_FEE.toLocaleString()}원`]] : []);
+                    return r('세린캠 운영비', fixed, '', true)
+                        + `<details class="sl-ops"><summary>자세히 보기 <i>⌄</i></summary><div class="sl-ops-in">${ops.map(([n, v, em]) => `<div><span>${n}${em ? ` <em style="font-style:normal;color:#94A3B8;font-size:11.5px">${em}</em>` : ''}</span><b>−${v.toLocaleString()}원</b></div>`).join('')}</div></details>`;
+                })() : '<div class="sl-row"><span>운영비<em>첫 매출 이전 달</em></span><b>0원</b></div>'}
+                <div class="sl-row tot"><span>순수익</span><b class="${net < 0 ? 'sl-neg' : 'sl-pos'}">${won(net)}</b></div>
+            </div>`;
+        }
+
+        // 수령 방법 · 결제 수단 비율 (건수 기준) — 상단 카드 안 쌓인 막대
+        function ratioHtml(sel) {
+            const n = sel.items.length;
+            if (!n) return '';
+            const dg = { 택배: 0, 공연장: 0, 사무실: 0, 퀵: 0, 기타: 0 };
+            const pg = { 카드결제: 0, 계좌이체: 0, 미입력: 0, 기타: 0 };
+            sel.items.forEach(it => {
+                const d = String(it.delivery || '');
+                dg[d.includes('택배') ? '택배' : (d.includes('공연장') || d.includes('현장')) ? '공연장' : d.includes('사무실') ? '사무실' : d.includes('퀵') ? '퀵' : '기타']++;
+                const g = payGroupOf(it);
+                pg[g === '카드' ? '카드결제' : g === '이체' ? '계좌이체' : g === '미확인' ? '미입력' : '기타']++;
+            });
+            const dc = { 택배: '#F97316', 공연장: '#10B981', 사무실: '#6366F1', 퀵: '#0EA5E9', 기타: '#CBD5E1' };
+            const pc = { 카드결제: '#10B981', 계좌이체: '#3B82F6', 미입력: '#CBD5E1', 기타: '#F59E0B' };
+            const block = (title, g, col) => {
+                const list = Object.entries(g).filter(([, c]) => c);
+                return `<div class="sl-rt"><div class="sl-rt-h">${title}</div>
+                    <div class="sl-rt-bar">${list.map(([k, c]) => `<span style="width:${c / n * 100}%;background:${col[k]}"></span>`).join('')}</div>
+                    <div class="sl-rt-lg">${list.map(([k, c]) => `<span><i style="background:${col[k]}"></i>${k} <b>${Math.round(c / n * 100)}%</b> <em>${c}건</em></span>`).join('')}</div></div>`;
+            };
+            return `<div class="sl-rts">${block('수령 방법', dg, dc)}${block('결제 수단', pg, pc)}</div>`;
+        }
+        function render() {
+            const body = document.getElementById('sales-body');
+            if (!body) return;
+            const SALES_START = '2026-04-01'; // [11-17] 2026년 4월부터 집계
+            const counted = (allData || []).filter(it => isSalesCounted(it) && salesDateOf(it) >= SALES_START);
+            const pending = (allData || []).filter(it => notCanceled(it) && isPost(it) && !salesDateOf(it));
+            const t = todayKST();
+            const curK = t.getFullYear() * 100 + t.getMonth() + 1;
+            const map = {};
+            counted.forEach(it => { const k = kOf(salesDateOf(it)); (map[k] = map[k] || []).push(it); });
+            const keys0 = Object.keys(map).map(Number);
+            const firstK = keys0.length ? Math.min(...keys0) : curK;
+            const lastK = Math.max(curK, ...keys0);
+            const months = [];
+            for (let k = firstK; k <= lastK; k = nextK(k)) {
+                const items = map[k] || [];
+                const sum = salesSumOf(items);
+                // 방문택배신청 1건당 3,500원도 운영비로 공제 (11-17)
+                sum.visit = items.filter(it => String(it.category || '').includes('방문택배')).length;
+                const fixed = (keys0.length ? SALES_FIXED_TOTAL : 0) + sum.visit * SALES_VISIT_FEE;
+                months.push({ k, items, sum, fixed, profit: sum.net - fixed });
+            }
+            const byK = {}; months.forEach(m => byK[m.k] = m);
+            if (!selK || !byK[selK]) selK = curK;
+            const sel = byK[selK] || { k: selK, items: [], sum: salesSumOf([]), fixed: 0, profit: 0 };
+            const prv = byK[prevK(selK)];
+            const diff = prv && prv.sum.gross > 0 ? Math.round((sel.sum.gross - prv.sum.gross) / prv.sum.gross * 100) : null; // 매출액 기준
+            const avg = avgOf(sel.items);
+
+            // 최근 6개월 추이 (선택한 달이 오른쪽 끝 근처에 오도록)
+            let endK = Math.min(lastK, Math.max(selK, curK));
+            const chart = []; for (let k = endK, i = 0; i < 6; i++, k = prevK(k)) chart.unshift({ k, profit: byK[k] ? byK[k].sum.gross : 0 }); // 막대 = 매출액
+            const maxAbs = Math.max(1, ...chart.map(c => Math.abs(c.profit)));
+            const hasNeg = chart.some(c => c.profit < 0), hasPos = chart.some(c => c.profit > 0);
+            const zeroPct = hasNeg && hasPos ? (Math.max(...chart.map(c => Math.max(0, c.profit))) / (Math.max(...chart.map(c => Math.max(0, c.profit))) + Math.max(...chart.map(c => Math.max(0, -c.profit))))) * 100 : (hasNeg ? 0 : 100);
+            const span = hasNeg && hasPos ? (Math.max(...chart.map(c => Math.max(0, c.profit))) + Math.max(...chart.map(c => Math.max(0, -c.profit)))) : maxAbs;
+
+            // 선택한 달의 결제수단 · 모델
+            const st = computeStatsForItems(sel.items);
+            const payColors = { 카드: '#10B981', 이체: '#3B82F6', 기타: '#F59E0B', 미확인: '#94A3B8' };
+            const payTot = Object.values(st.payGroups).reduce((a, g) => a + g.total, 0);
+            const wk = [0, 0, 0, 0, 0, 0, 0];
+            counted.forEach(it => { const d = salesDateOf(it); wk[new Date(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10)).getDay()]++; });
+            const wkMax = Math.max(1, ...wk);
+            const profitAll = months.reduce((a, m) => a + m.profit, 0);
+
+            body.innerHTML = `
+            <div class="sl-card">
+                <div class="sl-mnav">
+                    <button type="button" onclick="slMove(-1)" ${selK <= firstK ? 'disabled' : ''} aria-label="이전 달"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+                    <b>${kLabel(selK)}${selK === curK ? '<span>이번 달</span>' : ''}</b>
+                    <button type="button" onclick="slMove(1)" ${selK >= lastK ? 'disabled' : ''} aria-label="다음 달"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+                </div>
+                <div class="sl-big">
+                    <s>매출액</s>
+                    <strong class="sl-gross">${won(sel.sum.gross)}</strong>
+                    ${diff !== null ? `<span class="sl-diff ${diff >= 0 ? 'up' : 'dn'}">지난달보다 ${diff >= 0 ? '▲' : '▼'} ${Math.abs(diff)}%</span>` : `<span class="sl-diff">지난달 비교 없음</span>`}
+                </div>
+                <div class="sl-kpis" style="grid-template-columns:repeat(2,1fr)">
+                    <div><s>예약</s><b>${sel.sum.count}건</b></div>
+                    <div><s>평균 단가</s><b>${avg.toLocaleString()}원</b></div>
+                    
+                </div>
+                ${ratioHtml(sel)}
+                <details class="sl-acc"><summary>순수익 보기 <i>⌄</i></summary>${rowsHtml(sel.sum, sel.fixed)}</details>
+            </div>
+
+            <div class="sl-card">
+                <div class="sl-h">월별 매출액 추이 <small>막대를 누르면 그 달로 이동</small></div>
+                <div class="sl-chart">
+                    ${chart.map(c => {
+                        const h = Math.round(Math.abs(c.profit) / span * 100);
+                        const pos = c.profit >= 0;
+                        const style = pos ? `bottom:${100 - zeroPct}%;height:${Math.max(c.profit ? 2 : 0, h)}%` : `top:${zeroPct}%;height:${Math.max(2, h)}%`;
+                        return `<button type="button" class="sl-bar ${c.k === selK ? 'on' : ''}" onclick="slPick(${c.k})">
+                            <span class="v ${c.profit < 0 ? 'sl-neg' : ''}">${c.profit ? short(c.profit) : '0'}</span>
+                            <span class="area"><span class="zero" style="top:${zeroPct}%"></span><span class="fill ${pos ? '' : 'neg'}" style="${style}"></span></span>
+                            <span class="lb">${c.k % 100}월</span></button>`;
+                    }).join('')}
+                </div>
+            </div>
+
+            <div class="sl-card">
+                <div class="sl-h">월별 매출액 <small>누르면 순수익</small></div>
+                ${months.slice().reverse().map(m => `
+                <details class="sl-month">
+                    <summary><span class="t"><b>${kLabel(m.k)}</b><s>${m.sum.count}건 · 택배 ${m.sum.count ? Math.round(m.sum.shipCount / m.sum.count * 100) : 0}% · 평균 단가 ${avgOf(m.items).toLocaleString()}원</s></span><span class="p sl-gross">${won(m.sum.gross)}</span><i>⌄</i></summary>
+                    ${rowsHtml(m.sum, m.fixed)}
+                </details>`).join('')}
+            </div>
+
+            <div class="sl-card">
+                <div class="sl-h">인기 대여모델 <small>${kLabel(selK)} · ${st.modelTotal}건</small></div>
+                ${st.modelRank.length ? st.modelRank.map(([n, c]) => `
+                <div class="sl-li"><div class="top"><span>${n}</span><span>${c}건 <em>${Math.round(c / st.modelTotal * 100)}%</em></span></div><div class="track"><div style="width:${Math.round(c / st.modelRank[0][1] * 100)}%;background:#818CF8"></div></div></div>`).join('') : '<div class="sl-empty">이 달은 예약이 없어요</div>'}
+            </div>
+
+            <div class="sl-card">
+                <div class="sl-h">요일별 예약 <small>전체 기간 · 매출 기준일</small></div>
+                <div class="sl-wk">${wk.map((n, i) => `<div class="${i === 0 || i === 6 ? 'we' : ''}">${n}<span style="height:${Math.max(3, Math.round(n / wkMax * 60))}px"></span>${'일월화수목금토'[i]}</div>`).join('')}</div>
+            </div>
+
+            <div class="sl-card">
+                <div class="sl-h">전체 기간 <small>${kLabel(firstK)}부터</small></div>
+                <div class="sl-kpis" style="margin-top:0">
+                    <div><s>누적 매출액</s><b class="sl-gross">${short(months.reduce((a, m) => a + m.sum.gross, 0))}</b></div>
+                    <div><s>총 예약</s><b>${counted.length}건</b></div>
+                    <div><s>평균 단가</s><b>${avgOf(counted).toLocaleString()}원</b></div>
+                </div>
+                <details class="sl-acc"><summary>누적 순수익 보기 <i>⌄</i></summary><div class="sl-rows"><div class="sl-row tot" style="border-top:0 !important"><span>누적 순수익</span><b class="${profitAll < 0 ? 'sl-neg' : 'sl-pos'}">${won(profitAll)}</b></div></div></details>
+            </div>`;
+        }
+        window.slMove = function (n) { selK = n < 0 ? prevK(selK) : nextK(selK); render(); };
+        window.slPick = function (k) { selK = k; render(); };
+        window.renderSales = renderSales = render;
+        const _open = window.openSales;
+        window.openSales = openSales = function () { selK = null; return _open.apply(this, arguments); };
+        // 헤더 문구
+        const sub = [...document.querySelectorAll('#sales-overlay .text-\\[11px\\]')].find(el => /기준/.test(el.textContent));
+        if (sub) sub.textContent = '예약일 기준 · 택배는 송장 등록일 · 누르면 순수익';
+    })();
     </script>
 </body>
 </html>
