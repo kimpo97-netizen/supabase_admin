@@ -514,7 +514,8 @@
         <button class="hdr-quick-item" onclick="closeQuickMenu(); openSettings();"><span class="hdr-quick-ico" style="background:#eef2ff; color:#4f46e5;">⚙️</span> 설정</button>
         <button class="hdr-quick-item" onclick="closeQuickMenu(); openPushSettings();"><span class="hdr-quick-ico" style="background:#ecfeff; color:#0891b2;">🔔</span> 예약 알림<span class="apn-badge">꺼짐</span></button>
         <button class="hdr-quick-item" onclick="closeQuickMenu(); openPickupTimeSurvey();"><span class="hdr-quick-ico" style="background:#ecfeff; color:#0e7490;">🕒</span> 수령시간 조사</button>
-        <button class="hdr-quick-item" onclick="closeQuickMenu(); window.open('https://kimpo97-netizen.github.io/admin/', '_blank');"><span class="hdr-quick-ico" style="background:#f5f3ff; color:#7c3aed;">🏟️</span> 공연장</button>
+        <!-- [2026-11-22] 공연장 버튼 → 수령시간 조사 팝업 (기본: 이번 주 공연) -->
+        <button class="hdr-quick-item" onclick="closeQuickMenu(); openPickupTimeSurvey();"><span class="hdr-quick-ico" style="background:#f5f3ff; color:#7c3aed;">🏟️</span> 공연장</button>
         <button class="hdr-quick-item" onclick="closeQuickMenu(); openSales();"><span class="hdr-quick-ico" style="background:#ecfdf5; color:#059669;">📊</span> 매출 통계</button>
         <button class="hdr-quick-item" onclick="closeQuickMenu(); openTrash();"><span class="hdr-quick-ico" style="background:#fff1f2; color:#e11d48;">🗑️</span> 휴지통</button>
         <button class="hdr-quick-item" onclick="closeQuickMenu(); openLockerManager();"><span class="hdr-quick-ico" style="background:#fff1f2; color:#e11d48;">🗄️</span> 물품보관함</button>
@@ -9259,6 +9260,7 @@
                         <button type="button" data-copy style="font-size:12px;font-weight:700;color:#0E7490;border:1px solid #67E8F9;background:#fff;border-radius:6px;padding:4px 10px;white-space:nowrap">조사 링크 복사</button>
                     </div>
                     ${groups.length ? `<div style="padding:0 20px 12px;display:flex;gap:6px;align-items:center">
+                        <button type="button" data-pt-week style="font-size:12px;font-weight:800;border-radius:8px;padding:7px 10px;white-space:nowrap;border:1px solid #0891B2">이번 주</button>
                         <button type="button" data-pt-all style="font-size:12px;font-weight:800;border-radius:8px;padding:7px 10px;white-space:nowrap;border:1px solid #0891B2"></button>
                         <select data-pt-fname style="flex:1;min-width:0;font-size:12px;font-weight:700;color:#0F172A;border:1px solid #CBD5E1;border-radius:8px;padding:6px 6px;background:#fff">
                             <option value="">공연장 전체</option>
@@ -9271,18 +9273,27 @@
                     </div>` : ''}
                     <div style="overflow-y:auto;padding:0 20px 20px;display:flex;flex-direction:column;gap:10px">${body}<div data-pt-empty style="display:none;text-align:center;color:#94A3B8;font-size:13px;padding:30px 0">조건에 맞는 공연이 없어요</div></div>
                 </div>`;
+            // [2026-11-22] 기본은 이번 주(월~일) 공연만. 특정 공연을 눌러 열었는데 이번 주가 아니면 전체로 연다
+            const ptWeekEnd = (() => { const t = new Date(ptToday + 'T00:00:00'); t.setDate(t.getDate() + (7 - t.getDay()) % 7); return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`; })();
+            const ptInWeek = d => !d || d <= ptWeekEnd;
+            let ptWeekOnly = !focusName || groups.some(g => (g.key === focusName || g.name === focusName) && ptInWeek(g.date));
             // [NEW] 2026-11-07 공연명·날짜 필터 + 전체보기
             const ptApplyFilter = () => {
                 const fn = wrap.querySelector('[data-pt-fname]'), fd = wrap.querySelector('[data-pt-fdate]');
                 if (!fn) return;
                 let shown = 0;
                 wrap.querySelectorAll('[data-pt-group]').forEach(el => {
-                    const ok = (!fn.value || el.dataset.ptGroup === fn.value) && (!fd.value || el.dataset.ptDate === fd.value);
+                    const ok = (!fn.value || el.dataset.ptGroup === fn.value) && (!fd.value || el.dataset.ptDate === fd.value) && (!ptWeekOnly || ptInWeek(el.dataset.ptDate));
                     el.style.display = ok ? '' : 'none';
                     if (ok) shown++;
                 });
-                wrap.querySelector('[data-pt-empty]').style.display = shown ? 'none' : '';
-                const all = !fn.value && !fd.value;
+                const emptyEl = wrap.querySelector('[data-pt-empty]');
+                emptyEl.textContent = ptWeekOnly ? '이번 주 공연장 수령 예약이 없어요' : '조건에 맞는 공연이 없어요';
+                emptyEl.style.display = shown ? 'none' : '';
+                const wb = wrap.querySelector('[data-pt-week]');
+                wb.style.background = ptWeekOnly ? '#0891B2' : '#fff';
+                wb.style.color = ptWeekOnly ? '#fff' : '#0E7490';
+                const all = !fn.value && !fd.value && !ptWeekOnly;
                 const ab = wrap.querySelector('[data-pt-all]');
                 ab.textContent = all ? '전체보기' : '전체보기 ↺';
                 ab.style.background = all ? '#0891B2' : '#fff';
@@ -9291,7 +9302,9 @@
             wrap.addEventListener('change', e => { if (e.target.closest('[data-pt-fname],[data-pt-fdate]')) ptApplyFilter(); });
             wrap.addEventListener('click', e => {
                 if (e.target === wrap || e.target.closest('[data-close]')) wrap.remove();
+                if (e.target.closest('[data-pt-week]')) { ptWeekOnly = !ptWeekOnly; ptApplyFilter(); }
                 if (e.target.closest('[data-pt-all]')) {
+                    ptWeekOnly = false;
                     wrap.querySelector('[data-pt-fname]').value = '';
                     wrap.querySelector('[data-pt-fdate]').value = '';
                     ptApplyFilter();
