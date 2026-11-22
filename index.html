@@ -513,7 +513,6 @@
     <div id="hdr-quick-menu" class="hidden hdr-quick-menu">
         <button class="hdr-quick-item" onclick="closeQuickMenu(); openSettings();"><span class="hdr-quick-ico" style="background:#eef2ff; color:#4f46e5;">⚙️</span> 설정</button>
         <button class="hdr-quick-item" onclick="closeQuickMenu(); openPushSettings();"><span class="hdr-quick-ico" style="background:#ecfeff; color:#0891b2;">🔔</span> 예약 알림<span class="apn-badge">꺼짐</span></button>
-        <button class="hdr-quick-item" onclick="closeQuickMenu(); openPickupTimeSurvey();"><span class="hdr-quick-ico" style="background:#ecfeff; color:#0e7490;">🕒</span> 수령시간 조사</button>
         <!-- [2026-11-22] 공연장 버튼 → 수령시간 조사 팝업 (기본: 이번 주 공연) -->
         <button class="hdr-quick-item" onclick="closeQuickMenu(); openPickupTimeSurvey();"><span class="hdr-quick-ico" style="background:#f5f3ff; color:#7c3aed;">🏟️</span> 공연장</button>
         <button class="hdr-quick-item" onclick="closeQuickMenu(); openSales();"><span class="hdr-quick-ico" style="background:#ecfdf5; color:#059669;">📊</span> 매출 통계</button>
@@ -9009,8 +9008,13 @@
                 showToast('공연장 안내 자동 발송에 실패했어요. 수령시간 조사에서 직접 보내주세요');
             }
         }
-        async function openPtAlimtalkForm(key) {
+        // [2026-11-22] 수령시간 조사 카드의 ⭐ 자동발송 — 이 날짜+공연장에 켜진 자동발송 즐겨찾기
+        const ptAutoFavFor = (favs, date, venue) => (favs || []).filter(x => x.auto !== false && x.date && x.venue && x.date === ptNormDate(date) && x.venue === venue)
+            .sort((a, b) => String(b.savedAt || '').localeCompare(String(a.savedAt || '')))[0];
+        async function openPtAlimtalkForm(key, opts) {
             // key: 수령시간 조사 팝업의 공연 key, 또는 { key, date, name, rows, onSent } (상단 공연장 안내 버튼)
+            // opts.auto: [2026-11-22] 보내지 않고 이 날짜+공연장 자동발송(즐겨찾기)만 켜기·고치기·끄기
+            const autoMode = !!(opts && opts.auto);
             const g = typeof key === 'object' ? key : (window.__ptGroups || []).find(x => x.key === key);
             if (!g) return;
             document.getElementById('pt-alim-popup')?.remove();
@@ -9038,12 +9042,13 @@
             wrap.innerHTML = `
                 <div style="background:#fff;border-radius:16px;width:100%;max-width:400px;max-height:90vh;overflow-y:auto;padding:20px;box-shadow:0 20px 50px rgba(0,0,0,.2)">
                     <div style="display:flex;align-items:center;justify-content:space-between">
-                        <b style="font-size:16px;color:#0F172A">📨 공연장 수령 안내 보내기</b>
+                        <b style="font-size:16px;color:#0F172A">${autoMode ? '🤖 알림톡 자동발송 설정' : '📨 공연장 수령 안내 보내기'}</b>
                         <button type="button" data-close style="font-size:22px;line-height:1;color:#94A3B8;padding:2px 6px">×</button>
                     </div>
                     <div style="font-size:12px;color:#64748B;margin-top:4px">${escapeHtml((g.date ? g.date.slice(5).replace('-', '/') + ' ' : '') + g.name)} · ${g.onSent ? '선택' : '공연장 수령'} ${withPhone.length}명</div>
-                    ${last ? `<div style="background:#ECFEFF;border:1px solid #A5F3FC;border-radius:10px;padding:8px 10px;margin-top:10px;font-size:12px;color:#0E7490;font-weight:700;line-height:1.5">✅ ${escapeHtml(last.sentAt ? new Date(last.sentAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '지난번')}에 보낸 안내로 채워뒀어요<br><span style="font-weight:600">새로 예약한 분께는 그대로 [보내기]만 누르면 돼요</span></div>` : ''}
-                    ${!last && sentCount ? `<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;padding:8px 10px;margin-top:10px;font-size:12px;color:#C2410C;font-weight:700;line-height:1.5">이 공연은 이전에 보낸 안내 내용이 저장돼 있지 않아요<br><span style="font-weight:600">이번에 한 번 보내면 다음부터 자동으로 채워져요</span></div>` : ''}
+                    ${autoMode ? `<div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:10px;padding:8px 10px;margin-top:10px;font-size:12px;color:#B45309;font-weight:700;line-height:1.5">켜두면 이 날짜·공연장의 공연장수령 예약이 확정될 때(자동 입금확인·관리자 확정) 아래 내용으로 알림톡을 자동으로 보내요<br><span style="font-weight:600">지금 바로 보내지는 않아요${sentCount < withPhone.length ? ` · 이미 확정된 분 중 안내 못 받은 ${withPhone.length - sentCount}명은 [📨 알림톡 보내기]로 보내주세요` : ''}</span></div>` : ''}
+                    ${last && !autoMode ? `<div style="background:#ECFEFF;border:1px solid #A5F3FC;border-radius:10px;padding:8px 10px;margin-top:10px;font-size:12px;color:#0E7490;font-weight:700;line-height:1.5">✅ ${escapeHtml(last.sentAt ? new Date(last.sentAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '지난번')}에 보낸 안내로 채워뒀어요<br><span style="font-weight:600">새로 예약한 분께는 그대로 [보내기]만 누르면 돼요</span></div>` : ''}
+                    ${!last && !autoMode && sentCount ?`<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;padding:8px 10px;margin-top:10px;font-size:12px;color:#C2410C;font-weight:700;line-height:1.5">이 공연은 이전에 보낸 안내 내용이 저장돼 있지 않아요<br><span style="font-weight:600">이번에 한 번 보내면 다음부터 자동으로 채워져요</span></div>` : ''}
                     <div style="display:flex;gap:6px;align-items:center;margin-top:12px">
                         <select data-fav style="${inp};flex:1;min-width:0;background:#FFFBEB;border-color:#FCD34D;font-weight:700;font-size:13px"><option value="">⭐ 즐겨찾기 불러오는 중...</option></select>
                         <button type="button" data-fav-del style="display:none;flex-shrink:0;font-size:12px;font-weight:700;color:#DC2626;border:1px solid #FCA5A5;background:#fff;border-radius:8px;padding:8px 10px">삭제</button>
@@ -9065,12 +9070,14 @@
                     ${top && !last ? `<div style="font-size:11px;color:#0E7490;margin-top:3px">가장 많이 고른 시간 ${escapeHtml(ptTimeLabel(top.o))} (${top.n}명)으로 채워뒀어요</div>` : ''}
                     <label style="${lab}">안내사항</label>
                     <textarea data-f="note" maxlength="200" rows="2" placeholder="예) 도착하시면 카카오톡으로 연락 주세요" style="${inp};resize:none">${escapeHtml(last && last.note && last.note !== '-' ? last.note : '')}</textarea>
-                    <button type="button" data-fav-save style="width:100%;margin-top:10px;font-size:13px;font-weight:800;color:#B45309;border:1px solid #FCD34D;background:#FFFBEB;border-radius:8px;padding:8px">☆ 이 내용 즐겨찾기에 저장</button>
-                    <div data-fav-hint style="font-size:11px;color:#B45309;margin-top:4px;line-height:1.5"></div>
+                    <button type="button" data-fav-save style="width:100%;margin-top:10px;font-size:13px;font-weight:800;color:#B45309;border:1px solid #FCD34D;background:#FFFBEB;border-radius:8px;padding:8px;${autoMode ? 'display:none' : ''}">☆ 이 내용 즐겨찾기에 저장</button>
+                    <div data-fav-hint style="font-size:11px;color:#B45309;margin-top:4px;line-height:1.5;${autoMode ? 'display:none' : ''}"></div>
                     <div style="font-size:11px;color:#94A3B8;margin-top:8px">[수령장소 오시는 길] 버튼은 serincam.com/?page=venue-pickup 으로 연결돼요</div>
-                    ${sentCount ? `<label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#334155;margin-top:12px"><input type="checkbox" data-f="unsent" checked> 이미 안내 받은 ${sentCount}명은 빼고 보내기</label>` : ''}
+                    ${sentCount && !autoMode ? `<label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#334155;margin-top:12px"><input type="checkbox" data-f="unsent" checked> 이미 안내 받은 ${sentCount}명은 빼고 보내기</label>` : ''}
                     <div style="background:#FEF9C3;border-radius:10px;padding:12px;margin-top:14px;font-size:12.5px;line-height:1.6;color:#1E293B;white-space:pre-line" data-preview></div>
-                    <button type="button" data-send style="width:100%;margin-top:14px;background:#0891B2;color:#fff;font-weight:800;font-size:15px;border-radius:10px;padding:12px">보내기</button>
+                    ${autoMode ? `<button type="button" data-auto-save style="width:100%;margin-top:14px;background:#D97706;color:#fff;font-weight:800;font-size:15px;border-radius:10px;padding:12px">🤖 자동발송 켜기</button>
+                    <button type="button" data-auto-off style="display:none;width:100%;margin-top:8px;font-size:13px;font-weight:800;color:#DC2626;border:1px solid #FCA5A5;background:#fff;border-radius:10px;padding:10px">자동발송 끄기</button>`
+                    : `<button type="button" data-send style="width:100%;margin-top:14px;background:#0891B2;color:#fff;font-weight:800;font-size:15px;border-radius:10px;padding:12px">보내기</button>`}
                 </div>`;
             const f = n => wrap.querySelector(`[data-f="${n}"]`);
             let placeMode = 'pick';
@@ -9091,7 +9098,7 @@
                 if (fh) fh.textContent = ft.date && ft.venue ? `저장하면 ${Number(ft.date.slice(5, 7))}/${Number(ft.date.slice(8, 10))} ${ft.venue} 공연장수령 예약이 확정될 때(자동 입금확인·관리자 확정) 아직 안내를 못 받은 분께 자동으로 보내요` : '';
                 wrap.querySelector('[data-preview]').textContent =
                     `[공연장 수령 안내]\n■ 장소: ${getPlace() || '(입력해주세요)'}\n■ 시간: ${f('time').value.trim() || '(입력해주세요)'}\n■ 안내: ${f('note').value.trim() || '-'}`;
-                wrap.querySelector('[data-send]').textContent = `${targets().length}명에게 보내기`;
+                if (!autoMode) wrap.querySelector('[data-send]').textContent = `${targets().length}명에게 보내기`;
                 const pv = pickedVenue();
                 wrap.querySelector('[data-venue-detail]').textContent = pv ? `📍 ${ptVenuePlaceText(pv)}` : '';
             };
@@ -9103,7 +9110,18 @@
                     favs.map((x, i) => `<option value="${i}"${i === sel ? ' selected' : ''}>${escapeHtml(x.label)}${x.auto !== false && x.date && x.venue && x.date >= ptTodayStr() ? ' · 🤖 자동발송' : ''}</option>`).join('');
                 wrap.querySelector('[data-fav-del]').style.display = sel >= 0 ? '' : 'none';
             };
-            ptLoadVenueGuideFavs().then(list => { favs = list; renderFavs(-1); });
+            ptLoadVenueGuideFavs().then(list => {
+                favs = list; renderFavs(-1);
+                // [2026-11-22] 자동발송 설정: 이미 켜져 있으면 그 내용을 채우고 [끄기]를 보여준다
+                if (autoMode) {
+                    const t = favTarget(), cur = t.date && t.venue ? ptAutoFavFor(favs, t.date, t.venue) : null;
+                    if (cur) {
+                        applyFav(cur);
+                        wrap.querySelector('[data-auto-save]').textContent = '🤖 자동발송 내용 저장';
+                        wrap.querySelector('[data-auto-off]').style.display = '';
+                    }
+                }
+            });
             // 이 폼의 날짜+공연장 (수령시간 조사 카드 key = '날짜|공연장')
             const favTarget = () => {
                 const [kd, ...kv] = String(g.key || '').split('|');
@@ -9145,6 +9163,35 @@
                 try { await ptSaveVenueGuideFavs(list); favs = list; renderFavs(-1); showToast('즐겨찾기를 삭제했어요'); }
                 catch (err) { console.error('즐겨찾기 삭제 실패', err); alert('즐겨찾기를 삭제하지 못했어요.\n' + (err && err.message ? err.message : err)); }
             };
+            // [2026-11-22] 자동발송 켜기·저장 / 끄기 — 이 날짜+공연장 즐겨찾기(auto) 하나로 관리
+            const saveAuto = async () => {
+                const place = getPlace(), time = f('time').value.trim(), note = f('note').value.trim();
+                if (!place || !time) return showToast(placeMode === 'pick' && !place ? '픽업존을 골라주세요' : '수령 장소와 시간을 입력해주세요');
+                const { date: fDate, venue: fVenue } = favTarget();
+                if (!fDate || !fVenue) return showToast('공연장을 픽업존에서 골라주세요');
+                const label = `${Number(fDate.slice(5, 7))}/${Number(fDate.slice(8, 10))} ${fVenue}`;
+                const list = favs.filter(x => !(x.date === fDate && x.venue === fVenue) && x.label !== label);
+                list.unshift({ label, place, time, note, date: fDate, venue: fVenue, auto: true, savedAt: new Date().toISOString() });
+                try {
+                    await ptSaveVenueGuideFavs(list);
+                    favs = list;
+                    wrap.remove();
+                    showToast(`${label} 자동발송을 켰어요 · 예약이 확정되면 바로 보내요`);
+                    if (opts && opts.onSaved) opts.onSaved();
+                } catch (err) { console.error('자동발송 저장 실패', err); alert('자동발송을 저장하지 못했어요.\n' + (err && err.message ? err.message : err)); }
+            };
+            const autoOff = async () => {
+                const { date: fDate, venue: fVenue } = favTarget();
+                if (!confirm(`${Number(fDate.slice(5, 7))}/${Number(fDate.slice(8, 10))} ${fVenue} 자동발송을 끌까요?`)) return;
+                const list = favs.filter(x => !(x.date === fDate && x.venue === fVenue));
+                try {
+                    await ptSaveVenueGuideFavs(list);
+                    favs = list;
+                    wrap.remove();
+                    showToast('자동발송을 껐어요');
+                    if (opts && opts.onSaved) opts.onSaved();
+                } catch (err) { console.error('자동발송 끄기 실패', err); alert('자동발송을 끄지 못했어요.\n' + (err && err.message ? err.message : err)); }
+            };
             wrap.addEventListener('input', refresh);
             wrap.addEventListener('change', e => {
                 if (e.target.closest('[data-fav]')) {
@@ -9159,7 +9206,9 @@
                 if (e.target === wrap || e.target.closest('[data-close]')) return wrap.remove();
                 if (e.target.closest('[data-fav-save]')) return saveFav();
                 if (e.target.closest('[data-fav-del]')) return delFav();
-                const pm = e.target.closest('[data-pm]');
+                if (e.target.closest('[data-auto-save]')) return saveAuto();
+                if (e.target.closest('[data-auto-off]')) return autoOff();
+                const pm =e.target.closest('[data-pm]');
                 if (pm) return setPlaceMode(pm.dataset.pm);
                 const btn = e.target.closest('[data-send]');
                 if (!btn || btn.disabled) return;
@@ -9223,6 +9272,7 @@
                         ${(g.shows || []).length ? `<div style="font-size:11.5px;color:#64748B;margin-top:3px;line-height:1.5">🎤 ${g.shows.map(s => `${escapeHtml(s)} <span style="color:#94A3B8">${g.rows.filter(r => r.scheduleName === s).length}명</span>`).join(' · ')}</div>` : ''}
                         ${top ? `<div style="font-size:12px;color:#0E7490;font-weight:700;margin-top:4px">가장 많이 고른 시간: ${escapeHtml(top.o)} (${top.n}명)</div>` : ''}
                         <button type="button" data-pt-alim="${escapeHtml(g.key)}" style="margin-top:8px;width:100%;font-size:13px;font-weight:800;color:#fff;background:#0891B2;border-radius:8px;padding:8px">${(() => { const s = g.rows.filter(r => r.venueGuideSentAt).length, u = g.rows.length - s; return s && u ? `📨 새 예약 ${u}명에게 안내 보내기 <span style="font-weight:600;opacity:.85">(보냄 ${s}/${g.rows.length})</span>` : `📨 알림톡 보내기${s ? ` <span style="font-weight:600;opacity:.85">(안내 보냄 ${s}/${g.rows.length})</span>` : ''}`; })()}</button>
+                        <button type="button" data-pt-auto="${escapeHtml(g.key)}" style="margin-top:6px;width:100%;font-size:13px;font-weight:800;color:#B45309;background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;padding:7px">⭐ 알림톡 자동발송 설정</button>
                         <div style="margin-top:10px;display:flex;flex-direction:column;gap:5px">
                             ${counts.length === 0 ? '<div style="font-size:12px;color:#94A3B8">아직 응답이 없어요</div>' : ''}
                             ${counts.map(c => `
@@ -9311,12 +9361,29 @@
                 }
                 const alimBtn = e.target.closest('[data-pt-alim]');
                 if (alimBtn) openPtAlimtalkForm(alimBtn.dataset.ptAlim);
+                const autoBtn = e.target.closest('[data-pt-auto]');
+                if (autoBtn) openPtAlimtalkForm(autoBtn.dataset.ptAuto, { auto: true, onSaved: ptPaintAuto });
                 if (e.target.closest('[data-copy]')) {
                     navigator.clipboard.writeText(PT_SURVEY_URL).then(() => showToast('조사 링크를 복사했어요'), () => showToast('복사하지 못했어요'));
                 }
             });
+            // [2026-11-22] 카드별 자동발송 상태 표시 (켜짐이면 초록 + 시간)
+            const ptPaintAuto = () => ptLoadVenueGuideFavs().then(favs => {
+                wrap.querySelectorAll('[data-pt-auto]').forEach(b => {
+                    const g = groups.find(x => x.key === b.dataset.ptAuto);
+                    const fav = g ? ptAutoFavFor(favs, g.date, g.name) : null;
+                    if (fav) {
+                        b.textContent = `🤖 자동발송 켜짐 · ${fav.time}`;
+                        b.style.color = '#047857'; b.style.background = '#ECFDF5'; b.style.borderColor = '#6EE7B7';
+                    } else {
+                        b.textContent = '⭐ 알림톡 자동발송 설정';
+                        b.style.color = '#B45309'; b.style.background = '#FFFBEB'; b.style.borderColor = '#FCD34D';
+                    }
+                });
+            });
             document.body.appendChild(wrap);
             ptApplyFilter();
+            ptPaintAuto();
             if (focusName) {
                 const el = [...wrap.querySelectorAll('[data-pt-group]')].find(x => x.dataset.ptKey === focusName || x.dataset.ptGroup === focusName);
                 if (el) { el.style.borderColor = '#06B6D4'; el.querySelector('details').open = true; el.scrollIntoView({ block: 'center' }); }
