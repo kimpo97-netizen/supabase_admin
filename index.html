@@ -199,7 +199,8 @@
         /* ===================== 상단 헤더 ===================== */
         #app-header {
             position: sticky; top: 0; z-index: 60;
-            background: rgba(255,255,255,0.97); backdrop-filter: blur(12px);
+            background: #fff; /* [2026-11-22] blur 제거: 키보드 올라올 때 헤더 다시 그리느라 버벅이던 원인 */
+            touch-action: manipulation;
             border-bottom: 1px solid #E0E7FF;
             padding: calc(8px + env(safe-area-inset-top, 0px)) 10px 8px;
             box-shadow: 0 2px 12px -6px rgba(99,102,241,0.25);
@@ -258,6 +259,10 @@
         #card-new-reservation { display: none !important; }
         .hdr-row1 .hdr-search { flex: 0 1 52%; min-width: 0; margin-left: auto; }
         .hdr-row1 .hdr-search input { padding: 8px 0; font-size: 13px; }
+        /* [2026-11-22] 검색 키보드 지연 개선: 16px 미만이면 아이폰이 화면을 확대하는 애니메이션 뒤에 키보드가 떠서 늦게 느껴짐 */
+        #app-header .hdr-search { cursor: text; touch-action: manipulation; }
+        #app-header .hdr-search input#search-input { font-size: 16px; padding: 7px 0; -webkit-appearance: none; appearance: none; touch-action: manipulation; }
+        #search-input::-webkit-search-decoration { -webkit-appearance: none; }
         .hdr-chips .hdr-chip.hidden { display: none !important; }
         .low-stock-pop {
             position: fixed; z-index: 70; left: 10px; right: 10px; max-width: 420px; max-height: 60vh; overflow-y: auto;
@@ -442,10 +447,11 @@
         <!-- [2026-11-15 개편] 1줄: 제목 · 검색(절반) · 실행기록 · 설정 / 2줄: 알약 버튼(정렬·달력·초기화·신규·품절 등) -->
         <div class="hdr-row1">
             <span class="hdr-title"><span class="hdr-title-text">세린캠</span></span>
-            <div class="hdr-search">
+            <!-- [2026-11-22] 검색창 어디를 눌러도 바로 키보드가 뜨도록 label로 감쌈 + 16px(아이폰 자동확대 방지) + oninput(한글 입력 즉시 반영) -->
+            <label class="hdr-search" for="search-input">
                 <svg class="shrink-0" style="color:#a5b4fc" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                <input type="text" id="search-input" onkeyup="debouncedFilter()" placeholder="이름·송장·메모">
-            </div>
+                <input type="search" id="search-input" oninput="debouncedFilter()" placeholder="이름·송장·메모" inputmode="search" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+            </label>
             <button class="hdr-icon-btn hdr-menu" onclick="openActionLog()" aria-label="실행 기록">📜</button>
             <button id="hdr-quick-menu-btn" class="hdr-icon-btn hdr-menu" onclick="toggleQuickMenu()" aria-label="설정 메뉴">⚙️</button>
         </div>
@@ -2673,6 +2679,8 @@
 
             document.addEventListener('touchstart', (e) => {
                 if (refreshing || anyOverlayOpen()) { pulling = false; return; }
+                // [2026-11-22] 입력칸을 누를 땐 당겨서 새로고침 판정을 하지 않음 (손가락이 살짝 움직이면 탭이 취소돼 키보드가 늦게 뜨던 문제)
+                if (e.target.closest && e.target.closest('input, textarea, select, label.hdr-search, [contenteditable]')) { pulling = false; return; }
                 if (findScrolledNestedAncestor(e.target)) { pulling = false; return; }
                 if (window.scrollY <= 0) {
                     startY = e.touches[0].clientY;
