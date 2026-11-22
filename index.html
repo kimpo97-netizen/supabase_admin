@@ -6290,6 +6290,7 @@
                         <span class="text-[11px] leading-tight text-slate-400 font-bold font-tnum min-w-0 truncate">${timeText}</span>
                         <div class="flex-1"></div>
                         ${String(item.delivery || '').includes('퀵') ? `<button type="button" onclick="event.stopPropagation(); copyQuickInfoFromList('${item.row}')" class="shrink-0 flex items-center gap-1 text-[11px] font-bold text-sky-700 bg-sky-50 border border-sky-200 px-2 py-1 rounded-lg active:bg-sky-100">🏍️ 퀵</button>` : ''}
+                        ${ptCardBadge(item)}
                         ${item.isPackage
                             ? `<button type="button" onclick="event.stopPropagation(); copyRefundInfo('${item.row}')" class="package-badge shrink-0" style="font-size:11px; padding:4px 8px; border-radius:8px;" title="콘서트 패키지 예약 · 탭하면 환불 계좌 복사">🎁 패키지</button>`
                             : `<button type="button" onclick="event.stopPropagation(); copyRefundInfo('${item.row}')" class="shrink-0 flex items-center gap-1 text-[11px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-1 rounded-lg active:bg-rose-100">💰 환불</button>`}
@@ -6320,7 +6321,7 @@
 
                     <!-- 대여 일정 -->
                     <div class="flex items-center flex-wrap gap-x-1.5 gap-y-1 w-full text-[13.5px] font-black text-slate-800 font-tnum tracking-tight">
-                        <span>📅 ${start} <span class="text-blue-600 font-bold text-[12px]">(${item.delivery || '-'})</span>${ptCardBadge(item)}</span>
+                        <span>📅 ${start} <span class="text-blue-600 font-bold text-[12px]">(${item.delivery || '-'})</span></span>
                         <span class="text-slate-300">➔</span>
                         <span>${end} ${item.returnTrackingNumber ? `<button type="button" data-courier="${escapeHtml(item.returnCourier || '우체국택배')}" data-no="${escapeHtml(item.returnTrackingNumber)}" data-at="${escapeHtml(item.returnTrackingAt || '')}" onclick="event.stopPropagation(); openReturnTrackPopup(this)" class="font-bold text-[12px] hover:underline" style="color:#DB2777;background:#FCE7F3;border-radius:4px;padding:0 4px;cursor:pointer" title="반납 등기번호 등록됨 (클릭: 택배사·등기번호 보기)">(${item.returnWay || '-'})</button>` : `<span class="text-emerald-600 font-bold text-[12px]">(${item.returnWay || '-'})</span>`}</span>
                         ${needsReturnTrackRequest(item) ? `<button type="button" onclick="event.stopPropagation(); sendReturnTrackRequest('${item.row}')" class="ml-auto text-[11px] font-bold whitespace-nowrap rounded-md px-2 py-1" style="color:#DB2777;background:#FDF2F8;border:1px solid #FBCFE8">📮 등기번호 제출</button>` : ''}
@@ -8859,7 +8860,7 @@
         function ptCardBadge(item) {
             if (item.delivery !== '공연장수령' || !item.pickupTimePref) return '';
             const tip = '희망 수령 시간: ' + item.pickupTimePref + (item.pickupTimeNote ? '\n요청: ' + item.pickupTimeNote : '');
-            return `<button type="button" data-pt="${escapeHtml((item.startDate || '') + '|' + ptVenueOf(item))}" onclick="event.stopPropagation(); openPickupTimeSurvey(this.dataset.pt)" title="${escapeHtml(tip)}" style="margin-left:4px;font-size:11px;font-weight:800;color:#0E7490;background:#CFFAFE;border-radius:4px;padding:0 4px;cursor:pointer">🕒 ${escapeHtml(item.pickupTimePref.split(', ')[0].replace('시간 상관없어요', '무관'))}${item.pickupTimePref.includes(',') ? '+' : ''}</button>`;
+            return `<button type="button" data-pt="${escapeHtml((item.startDate || '') + '|' + ptVenueOf(item))}" onclick="event.stopPropagation(); openPickupTimeSurvey(this.dataset.pt)" title="${escapeHtml(tip)}" class="shrink-0" style="font-size:11px;font-weight:800;color:#0E7490;background:#ECFEFF;border:1px solid #A5F3FC;border-radius:8px;padding:4px 8px;line-height:1.2;white-space:nowrap;cursor:pointer">🕒 ${escapeHtml(item.pickupTimePref.split(', ')[0].replace('시간 상관없어요', '무관'))}${item.pickupTimePref.includes(',') ? '+' : ''}</button>`;
         }
         // [NEW] 2026-11-14 예약의 공연장 이름 — 주소에서 먼저 찾고, 없으면 행사명에서 찾는다
         function ptVenueOf(r) {
