@@ -1317,6 +1317,8 @@
         let trashItems = [];
 
         async function openTrash() {
+            const ts = document.getElementById('trash-search-input');
+            if (ts) ts.value = '';
             document.getElementById('trash-overlay').classList.remove('hidden');
             document.body.style.overflow = 'hidden';
             await loadTrash();
@@ -2142,16 +2144,48 @@
         }
 
         let selectedTrashIds = new Set();
+        // [2026-11-23] 휴지통 검색 — 띄어쓰기로 나눈 단어가 모두 들어간 항목만 (연락처는 하이픈 없이도 찾음)
+        function trashSearchText(it) {
+            return [it.row, it.name, it.phone, String(it.phone || '').replace(/[^0-9]/g, ''), it.model, it.startDate, it.endDate,
+                it.trackingNumber, it.memo, it.address, it.scheduleName, it.status, it.delivery, it.returnWay]
+                .filter(v => v !== undefined && v !== null).join(' ').toLowerCase();
+        }
+        function getFilteredTrashItems() {
+            const q = String(document.getElementById('trash-search-input')?.value || '').trim().toLowerCase();
+            if (!q) return trashItems;
+            const words = q.split(/\s+/);
+            return trashItems.filter(it => { const t = trashSearchText(it); return words.every(w => t.includes(w)); });
+        }
+        // 검색어가 바뀌면 선택을 비운다 (검색으로 안 보이는 항목이 [선택 삭제]에 섞이지 않도록)
+        function onTrashSearchInput() {
+            selectedTrashIds.clear();
+            renderTrashList();
+        }
+        function clearTrashSearch() {
+            const ts = document.getElementById('trash-search-input');
+            ts.value = '';
+            onTrashSearchInput();
+            ts.focus();
+        }
         function renderTrashList() {
             const list = document.getElementById('trash-list');
             const label = document.getElementById('trash-count-label');
-            if (label) label.innerText = trashItems.length > 0 ? `${trashItems.length}건 보관 중` : '휴지통이 비어 있어요';
+            const ts = document.getElementById('trash-search-input');
+            const searching = !!(ts && ts.value.trim());
+            document.getElementById('trash-search-clear')?.classList.toggle('hidden', !searching);
+            const items = getFilteredTrashItems();
+            if (label) label.innerText = trashItems.length === 0 ? '휴지통이 비어 있어요' : (searching ? `${trashItems.length}건 중 ${items.length}건 검색됨` : `${trashItems.length}건 보관 중`);
             if (trashItems.length === 0) {
                 list.innerHTML = `<div class="text-center text-slate-400 text-[13px] font-bold py-16">🗑️ 휴지통이 비어 있어요</div>`;
                 updateTrashSelectionUI();
                 return;
             }
-            list.innerHTML = trashItems.map(it => {
+            if (items.length === 0) {
+                list.innerHTML = `<div class="text-center text-slate-400 text-[13px] font-bold py-16">🔍 검색 결과가 없어요</div>`;
+                updateTrashSelectionUI();
+                return;
+            }
+            list.innerHTML = items.map(it => {
                 const dt = new Date(it.deleted_at);
                 const dtStr = isNaN(dt.getTime()) ? '' : `${dt.getFullYear()}.${dt.getMonth()+1}.${dt.getDate()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
                 const st = String(it.status || '');
@@ -2188,11 +2222,13 @@
             else selectedTrashIds.delete(id);
             updateTrashSelectionUI();
         }
+        // [2026-11-23] 검색 중이면 보이는(검색된) 항목만 전체선택·해제
         function toggleTrashSelectAll() {
-            if (selectedTrashIds.size === trashItems.length) {
-                selectedTrashIds.clear();
+            const items = getFilteredTrashItems();
+            if (items.length > 0 && items.every(it => selectedTrashIds.has(it.row))) {
+                items.forEach(it => selectedTrashIds.delete(it.row));
             } else {
-                trashItems.forEach(it => selectedTrashIds.add(it.row));
+                items.forEach(it => selectedTrashIds.add(it.row));
             }
             renderTrashList();
         }
@@ -2204,7 +2240,8 @@
                 btn.innerText = n > 0 ? `선택 삭제 (${n})` : '선택 삭제';
             }
             const allBtn = document.getElementById('trash-select-all-btn');
-            if (allBtn) allBtn.innerText = (n > 0 && n === trashItems.length) ? '전체해제' : '전체선택';
+            const vis = getFilteredTrashItems();
+            if (allBtn) allBtn.innerText = (vis.length > 0 && vis.every(it => selectedTrashIds.has(it.row))) ? '전체해제' : '전체선택';
         }
         async function permanentlyDeleteSelectedTrash() {
             if (selectedTrashIds.size === 0) {
@@ -8380,6 +8417,15 @@
                 <div class="flex items-center gap-2 px-3 pb-3">
                     <button id="trash-select-all-btn" onclick="toggleTrashSelectAll()" class="h-8 px-3 flex items-center rounded-lg bg-slate-100 text-slate-600 font-bold text-[12px] shrink-0">전체선택</button>
                     <button id="trash-delete-selected-btn" onclick="permanentlyDeleteSelectedTrash()" disabled class="h-8 px-3 flex items-center rounded-lg bg-rose-100 text-rose-700 font-bold text-[12px] shrink-0 disabled:opacity-40 disabled:cursor-not-allowed">선택 삭제</button>
+                </div>
+                <!-- [2026-11-23] 휴지통 검색 (이름·연락처·기종·날짜·송장·메모·주소·행사명·번호) -->
+                <div class="px-3 pb-3">
+                    <label for="trash-search-input" class="flex items-center gap-2 h-10 px-3 rounded-xl bg-slate-100 text-slate-400">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="shrink-0"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                        <style>#trash-search-input::-webkit-search-cancel-button{display:none;-webkit-appearance:none}#trash-search-clear:not(.hidden){display:flex}</style>
+                        <input type="search" id="trash-search-input" oninput="onTrashSearchInput()" placeholder="이름·연락처·기종·날짜·송장·메모" enterkeyhint="search" autocomplete="off" class="flex-1 min-w-0 bg-transparent outline-none text-slate-800 font-bold" style="font-size:16px;">
+                        <button type="button" id="trash-search-clear" onclick="event.preventDefault(); clearTrashSearch()" class="hidden items-center justify-center rounded-full bg-slate-300 text-white font-black" style="flex:0 0 22px;width:22px;height:22px;font-size:14px;line-height:1;" aria-label="검색어 지우기">×</button>
+                    </label>
                 </div>
             </div>
             <div id="trash-list" class="flex-1 overflow-y-auto" style="padding: 12px calc(12px) calc(28px + env(safe-area-inset-bottom,0px));"></div>
