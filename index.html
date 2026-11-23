@@ -2876,7 +2876,9 @@
         const LOW_STOCK_THRESHOLD = 2;        // 보유수량이 넉넉한 모델은 잔여 2대 이하일 때만 표시
         const LOW_STOCK_THRESHOLD_TIGHT = 0;  // 보유수량 자체가 적은(5대 이하) 모델은 잔여 0대(품절) 이하일 때만 표시
         const LOW_STOCK_TIGHT_STOCK_MAX = 5;  // 이 대수 이하 보유량이면 "보유수량 적음"으로 간주
-        const LOW_STOCK_LOOKAHEAD_DAYS = 30; // 오늘부터 며칠 앞까지 스캔할지
+        const LOW_STOCK_LOOKAHEAD_DAYS = 30; // 오늘부터 며칠 앞까지 스캔할지 (재고 부족 임박 알림용)
+        // [2026-11-23] 홈페이지 자동 마감은 30일 너머 예약도 막아야 해서 1년치를 계산 (12/26 예약이 30일 밖이라 마감 안 되던 문제)
+        const STOCK_CLOSURE_LOOKAHEAD_DAYS = 400;
         function fmtMonthDay(d) { return `${d.getMonth() + 1}/${d.getDate()}`; }
         // 모델별로 날짜를 하루씩 스캔하면서, 기준치 이하로 부족한 날이 연속되면 하나의 구간으로 묶습니다.
         // (예약이 시작/종료되면서 날마다 남은 대수 자체는 조금씩 달라질 수 있으므로, 값이 정확히 같아야만 묶지 않고
@@ -2971,7 +2973,7 @@
                 const total = stock[model];
                 const ranges = occupancy[model];
                 const adjust = getStockAdjustments(model);
-                const merged = findCriticalRanges(ranges, total, 0, LOW_STOCK_LOOKAHEAD_DAYS, adjust); // 완전 품절(0대 이하)만 마감 처리
+                const merged = findCriticalRanges(ranges, total, 0, STOCK_CLOSURE_LOOKAHEAD_DAYS, adjust); // 완전 품절(0대 이하)만 마감 처리
 
                 const dateKeys = [];
                 merged.forEach(r => {
